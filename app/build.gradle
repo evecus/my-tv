@@ -21,26 +21,40 @@ android {
         // This block is different from the one you use to link Gradle
         // to your CMake or ndk-build script.
         externalNativeBuild {
-
-            // For ndk-build, instead use the ndkBuild block.
             cmake {
                 arguments "-DIS_SO_BUILD=${project.hasProperty('IS_SO_BUILD') ? project.IS_SO_BUILD : true}"
-
-                abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
-//                abiFilters "armeabi-v7a", "arm64-v8a"
+                abiFilters "armeabi-v7a", "arm64-v8a"
             }
         }
 
-        // Similar to other properties in the defaultConfig block,
-        // you can configure the ndk block for each product flavor
-        // in your build configuration.
         ndk {
-            // Specifies the ABI configurations of your native
-            // libraries Gradle should build and package with your app.
-            abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
-//            abiFilters "armeabi-v7a", "arm64-v8a"
+            abiFilters "armeabi-v7a", "arm64-v8a"
         }
         multiDexEnabled true
+    }
+
+    // 每个 ABI 单独输出一个 APK
+    splits {
+        abi {
+            enable true
+            reset()
+            include "armeabi-v7a", "arm64-v8a"
+            universalApk false   // 不生成包含所有 ABI 的通用 APK
+        }
+    }
+
+    // 让两个 APK 的 versionCode 不同（Google Play 要求；本地安装无所谓）
+    // arm64-v8a → versionCode * 100 + 2
+    // armeabi-v7a → versionCode * 100 + 1
+    applicationVariants.configureEach { variant ->
+        variant.outputs.configureEach { output ->
+            def abiCode = ['armeabi-v7a': 1, 'arm64-v8a': 2]
+            def abi = output.getFilter(com.android.build.OutputFile.ABI)
+            if (abi != null) {
+                output.versionCodeOverride = variant.versionCode * 100 + (abiCode[abi] ?: 0)
+                output.outputFileName = "mytv-${variant.versionName}-${abi}.apk"
+            }
+        }
     }
 
     buildTypes {
