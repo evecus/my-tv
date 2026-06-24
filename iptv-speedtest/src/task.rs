@@ -1,0 +1,374 @@
+use crate::channel::{
+    build_m3u8_entry, clean_channel_name, get_standard_channel_map, map_to_standard_name,
+};
+use crate::config::{API_URL, HSMD_ADDRESS_LIST_FILE, SPEED_LOW};
+use crate::output::build_and_write;
+use crate::speedtest::{fetch_channels_for_source, run_api_speed_tests, test_subscribe_hosts};
+use crate::subscribe::{download_subscribes, host_key, parse_subscribe_file};
+use crate::types::{Entry, SourceResult};
+#[cfg(not(feature = "android"))]
+use crate::AppState;
+use once_cell::sync::Lazy;
+use regex::Regex;
+use reqwest::Client;
+use serde_json::Value;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
+use url::Url;
+
+static IS_RUNNING: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false));
+
+pub fn is_running() -> bool {
+    IS_RUNNING.load(Ordering::Relaxed)
+}
+
+/// 主调度任务
+#[cfg(not(feature = "android"))]
+pub async fn run_task(
+    state: std::sync::Arc<AppState>,
+    workers: usize,
+    top_n: usize,
+    urls: Vec<String>,
+) {
+    if IS_RUNNING
+        .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+        .is_err()
+    {
+        println!("[task] already running, skipping");
+        return;
+    }
+    let start = std::time::Instant::now();
+    println!("[task] ── start ──────────────────────────────────────────────");
+
+    let std_map = get_standard_channel_map();
+    let mut all_entries: Vec<Entry> = vec![];
+    let mut source_idx = 0usize;
+
+    // ── Step 1: 下载订阅文件 ──────────────────────────────────────
+    println!("[task] downloading subscribe files...");
+    let sub_cache = download_subscribes(&urls).await;
+
+    // ── Step 2 & 3: 获取 + 测速 API 主机 ─────────────────────────
+    let api_items = fetch_api_data().await;
+    if !api_items.is_empty() {
+        println!("[task] speed-testing {} API hosts...", api_items.len());
+        let raw_results = run_api_speed_tests(api_items, workers).await;
+        let mut top_sources = select_top_sources(raw_results, top_n);
+        println!("[task] selected {} API sources", top_sources.len());
+
+        for (idx, src) in top_sources.iter_mut().enumerate() {
+            println!(
+                "  [api] #{} {:.2}MB/s [{}] {} ({})",
+                idx + 1,
+                src.speed,
+                crate::channel::speed_tier(src.speed),
+                src.host,
+                src.match_type
+            );
+            fetch_channels_for_source(src).await;
+            let entries = match src.match_type.as_str() {
+                "txiptv" | "zhgxtv" | "jsmpeg" => {
+                    build_entries(&src.channels, source_idx, src.speed, &std_map)
+                }
+                "hsmdtv" => process_hsmdtv_channels(&src.host, source_idx, src.speed, &std_map),
+                _ => vec![],
+            };
+            all_entries.extend(entries);
+            source_idx += 1;
+        }
+    }
+
+    // ── Step 4: 测速订阅源 ────────────────────────────────────────
+    for (raw_url, cache_path) in &sub_cache {
+        let channels = parse_subscribe_file(cache_path);
+        if channels.is_empty() {
+            println!("[subscribe] no channels parsed from {}", raw_url);
+            continue;
+        }
+        println!(
+            "[subscribe] {} channels from {} — testing hosts...",
+            channels.len(),
+            raw_url
+        );
+        let host_speeds = test_subscribe_hosts(&channels, workers).await;
+
+        let mut added = 0usize;
+        for ch in &channels {
+            let hk = host_key(&ch.url);
+            let spd = match host_speeds.get(&hk) {
+                Some(&s) if s >= SPEED_LOW => s,
+                _ => continue,
+            };
+            let name = map_to_standard_name(&clean_channel_name(&ch.name), &std_map).to_string();
+            all_entries.push(Entry {
+                content: build_m3u8_entry(&name, &ch.url, spd),
+                name,
+                url: ch.url.clone(),
+                index: source_idx,
+                speed: spd,
+            });
+            added += 1;
+        }
+        println!("[subscribe] kept {} / {} channels", added, channels.len());
+        source_idx += 1;
+    }
+
+    if all_entries.is_empty() {
+        println!("[task] no entries collected, keeping cache");
+        IS_RUNNING.store(false, Ordering::Release);
+        return;
+    }
+
+    // ── Step 5: 构建并写入输出 ────────────────────────────────────
+    let update_time = chrono::Local::now();
+    let (m3u8, txt) = build_and_write(all_entries, update_time);
+
+    {
+        let mut guard = state.data.write().await;
+        guard.m3u8 = m3u8;
+        guard.txt = txt;
+        guard.last_run = update_time.format("%Y-%m-%d %H:%M:%S").to_string();
+    }
+
+    IS_RUNNING.store(false, Ordering::Release);
+    println!("[task] done — elapsed {}s", start.elapsed().as_secs());
+}
+
+// ── 内部辅助 ──────────────────────────────────────────────────────
+
+async fn fetch_api_data() -> Vec<serde_json::Map<String, Value>> {
+    let client = Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap();
+    for attempt in 1..=3 {
+        println!("[api] fetch attempt {}: {}", attempt, API_URL);
+        if let Ok(resp) = client.get(API_URL).send().await {
+            if resp.status() == 200 {
+                if let Ok(data) = resp.json::<Value>().await {
+                    if let Some(results) = data["results"].as_array() {
+                        let out: Vec<_> = results
+                            .iter()
+                            .filter_map(|r| r.as_object().cloned())
+                            .collect();
+                        println!("[api] received {} hosts", out.len());
+                        return out;
+                    }
+                }
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(5)).await;
+    }
+    println!("[api] fetch failed after 3 retries");
+    vec![]
+}
+
+fn select_top_sources(mut results: Vec<SourceResult>, top_n: usize) -> Vec<SourceResult> {
+    results.sort_by(|a, b| {
+        b.speed
+            .partial_cmp(&a.speed)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let mut selected_hosts = std::collections::HashSet::new();
+    let mut final_results: Vec<SourceResult> = vec![];
+
+    // 每种类型至少保留一个
+    for mt in &["txiptv", "hsmdtv", "zhgxtv", "jsmpeg"] {
+        if let Some(r) = results
+            .iter()
+            .find(|r| r.match_type == *mt && !selected_hosts.contains(&r.host))
+        {
+            selected_hosts.insert(r.host.clone());
+            final_results.push(r.clone());
+        }
+    }
+    // 填充至 top_n
+    for r in &results {
+        if final_results.len() >= top_n {
+            break;
+        }
+        if !selected_hosts.contains(&r.host) {
+            selected_hosts.insert(r.host.clone());
+            final_results.push(r.clone());
+        }
+    }
+    final_results.sort_by(|a, b| {
+        b.speed
+            .partial_cmp(&a.speed)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    final_results
+}
+
+fn build_entries(
+    channels: &[crate::types::Channel],
+    idx: usize,
+    speed: f64,
+    std_map: &std::collections::HashMap<String, String>,
+) -> Vec<Entry> {
+    channels
+        .iter()
+        .map(|ch| {
+            let name = map_to_standard_name(&clean_channel_name(&ch.name), std_map).to_string();
+            Entry {
+                content: build_m3u8_entry(&name, &ch.url, speed),
+                name,
+                url: ch.url.clone(),
+                index: idx,
+                speed,
+            }
+        })
+        .collect()
+}
+
+static RE_URL: Lazy<Regex> = Lazy::new(|| Regex::new(r"(http://[^\s]+)").unwrap());
+static RE_ID: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*\d+\s+").unwrap());
+
+fn process_hsmdtv_channels(
+    host: &str,
+    source_index: usize,
+    speed: f64,
+    std_map: &std::collections::HashMap<String, String>,
+) -> Vec<Entry> {
+    let Ok(data) = std::fs::read_to_string(HSMD_ADDRESS_LIST_FILE) else {
+        println!("[hsmd] {} not found, skipping", HSMD_ADDRESS_LIST_FILE);
+        return vec![];
+    };
+    let mut entries = vec![];
+    for line in data.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let Some(loc) = RE_URL.find(line) else {
+            continue;
+        };
+        let url_in_file = loc.as_str();
+        let before = &line[..loc.start()];
+        let name_raw = RE_ID
+            .replace(before, "")
+            .replace("（默认频道）", "")
+            .trim()
+            .to_string();
+        let name = map_to_standard_name(&clean_channel_name(&name_raw), std_map).to_string();
+        let Ok(p) = Url::parse(url_in_file) else {
+            continue;
+        };
+        let new_url = format!("http://{}{}", host, p.path());
+        entries.push(Entry {
+            content: build_m3u8_entry(&name, &new_url, speed),
+            name,
+            url: new_url,
+            index: source_index,
+            speed,
+        });
+    }
+    entries
+}
+
+// ── Android CLI 专用入口 ──────────────────────────────────────────
+
+/// Android 模式：测速完成后把所有频道以 JSON 形式返回
+/// 结构：[{"name":"CCTV1","url":"http://...","speed":3.2,"group":"央视频道"}, ...]
+pub async fn run_task_android(
+    workers: usize,
+    top_n: usize,
+    urls: Vec<String>,
+) -> Vec<serde_json::Value> {
+    let start = std::time::Instant::now();
+    eprintln!("[android] ── speedtest start ──");
+
+    let std_map = get_standard_channel_map();
+    let mut all_entries: Vec<Entry> = vec![];
+    let mut source_idx = 0usize;
+
+    // Step 1 & Step 2 并行：同时下载订阅文件 + 获取 API 网关列表
+    eprintln!("[android] fetching api list & subscribe files in parallel...");
+    let sub_urls = urls.clone();
+    let (api_items, sub_cache) = tokio::join!(
+        fetch_api_data(),
+        crate::subscribe::download_subscribes(&sub_urls),
+    );
+
+    // Step 3: 并发测速 API 网关
+    if !api_items.is_empty() {
+        eprintln!("[android] speed-testing {} api hosts...", api_items.len());
+        let raw_results = run_api_speed_tests(api_items, workers).await;
+        let mut top_sources = select_top_sources(raw_results, top_n);
+        eprintln!("[android] selected {} api sources", top_sources.len());
+
+        for src in top_sources.iter_mut() {
+            fetch_channels_for_source(src).await;
+            let entries = match src.match_type.as_str() {
+                "txiptv" | "zhgxtv" | "jsmpeg" => {
+                    build_entries(&src.channels, source_idx, src.speed, &std_map)
+                }
+                "hsmdtv" => process_hsmdtv_channels(&src.host, source_idx, src.speed, &std_map),
+                _ => vec![],
+            };
+            all_entries.extend(entries);
+            source_idx += 1;
+        }
+    }
+
+    // Step 4: 测速订阅源
+    for (raw_url, cache_path) in &sub_cache {
+        let channels = crate::subscribe::parse_subscribe_file(cache_path);
+        if channels.is_empty() {
+            eprintln!("[android] no channels from {}", raw_url);
+            continue;
+        }
+        eprintln!("[android] {} channels from {} — testing hosts...", channels.len(), raw_url);
+        let host_speeds = crate::speedtest::test_subscribe_hosts(&channels, workers).await;
+
+        let mut added = 0usize;
+        for ch in &channels {
+            let hk = crate::subscribe::host_key(&ch.url);
+            let spd = match host_speeds.get(&hk) {
+                Some(&s) if s >= crate::config::SPEED_LOW => s,
+                _ => continue,
+            };
+            let name = crate::channel::map_to_standard_name(
+                &crate::channel::clean_channel_name(&ch.name),
+                &std_map,
+            )
+            .to_string();
+            all_entries.push(Entry {
+                content: crate::channel::build_m3u8_entry(&name, &ch.url, spd),
+                name,
+                url: ch.url.clone(),
+                index: source_idx,
+                speed: spd,
+            });
+            added += 1;
+        }
+        eprintln!("[android] kept {} / {} channels", added, channels.len());
+        source_idx += 1;
+    }
+
+    eprintln!(
+        "[android] done — {} entries in {}s",
+        all_entries.len(),
+        start.elapsed().as_secs()
+    );
+
+    // 转换为 JSON 数组，每条包含 name / url / speed / group
+    all_entries
+        .iter()
+        .map(|e| {
+            let group = if e.name.to_uppercase().contains("CCTV") {
+                "央视频道"
+            } else if e.name.contains("卫视") {
+                "卫视频道"
+            } else {
+                "其他频道"
+            };
+            serde_json::json!({
+                "name":  e.name,
+                "url":   e.url,
+                "speed": (e.speed * 100.0).round() / 100.0,
+                "group": group,
+            })
+        })
+        .collect()
+}

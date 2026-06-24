@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  iptv-speed-tester:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: iptv-speed-tester:latest
+    container_name: iptv-speed-tester
+    restart: unless-stopped
+    ports:
+      - "3030:3030"
+    volumes:
+      # 持久化缓存文件和自定义频道列表
+      - ./data:/app/data
+    environment:
+      - PORT=3030
+      - WORKERS=20
+      - TOP=5
+      - INTERVAL=6h
+      # 可选：额外订阅源（最多 URL20）
+      # - URL1=http://your-subscribe-url-1
+      # - URL2=http://your-subscribe-url-2
+    working_dir: /app/data

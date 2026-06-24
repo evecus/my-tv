@@ -1,0 +1,42 @@
+# ── 预编译镜像（由 CI workflow 使用）────────────────────────────────
+# 二进制由 workflow 的 build job 交叉编译后放入 docker-bin/ 目录，
+# 再由本文件根据目标平台选择对应二进制复制进镜像，
+# 避免在 Docker 内部执行耗时的 Rust 编译。
+
+FROM alpine:3.19
+
+RUN apk add --no-cache tzdata ca-certificates
+
+WORKDIR /app
+
+ARG TARGETARCH
+ARG TARGETVARIANT
+
+COPY docker-bin/ /tmp/bins/
+
+RUN set -e; \
+    case "${TARGETARCH}${TARGETVARIANT}" in \
+      amd64)   cp /tmp/bins/iptv-linux-amd64 /app/iptv ;; \
+      arm64)   cp /tmp/bins/iptv-linux-arm64 /app/iptv ;; \
+      armv7)   cp /tmp/bins/iptv-linux-armv7 /app/iptv ;; \
+      *)       echo "unsupported arch: ${TARGETARCH}${TARGETVARIANT}" && exit 1 ;; \
+    esac && \
+    chmod +x /app/iptv && \
+    rm -rf /tmp/bins
+
+ENV TZ=Asia/Shanghai
+
+# 默认运行时环境变量（可用 -e 或 compose env: 覆盖）
+ENV PORT=3030
+ENV WORKERS=20
+ENV TOP=5
+ENV INTERVAL=6h
+# ENV URL1=http://your-subscribe.m3u
+
+RUN mkdir -p /app/data
+WORKDIR /app/data
+
+EXPOSE 3030
+
+ENTRYPOINT ["/app/iptv"]
+CMD ["--port", "3030", "--workers", "20", "--top", "5", "--interval", "6h"]
