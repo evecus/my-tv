@@ -103,13 +103,14 @@ class MainActivity : FragmentActivity(), Request.RequestListener, OnSharedPrefer
             val transaction = supportFragmentManager.beginTransaction()
                 .add(R.id.main_browse_fragment, playerFragment)
                 .add(R.id.main_browse_fragment, errorFragment)
-//                .add(R.id.main_browse_fragment, loadingFragment)
+                .add(R.id.main_browse_fragment, loadingFragment)
                 .add(R.id.main_browse_fragment, timeFragment)
                 .add(R.id.main_browse_fragment, infoFragment)
                 .add(R.id.main_browse_fragment, channelFragment)
                 .add(R.id.main_browse_fragment, mainFragment)
                 .hide(mainFragment)
                 .hide(errorFragment)
+                .hide(loadingFragment)
 
             if (!SP.time) {
                 transaction.hide(timeFragment)
@@ -148,11 +149,16 @@ class MainActivity : FragmentActivity(), Request.RequestListener, OnSharedPrefer
         // 首次安装（从未测过速）或用户开启了自动测速 → 后台自动跑一次
         val neverTested = SP.lastSpeedtest == 0L
         if (neverTested || SP.autoSpeedtest) {
+            // 测速期间显示 loading，避免黑屏
+            showLoadingFragment()
             lifecycleScope.launch(Dispatchers.IO) {
                 val count = SpeedtestManager.runSpeedtest(this@MainActivity)
-                if (count > 0) {
-                    SP.lastSpeedtest = System.currentTimeMillis()
-                    withContext(Dispatchers.Main) { reloadChannels() }
+                withContext(Dispatchers.Main) {
+                    hideLoadingFragment()
+                    if (count > 0) {
+                        SP.lastSpeedtest = System.currentTimeMillis()
+                        reloadChannels()
+                    }
                 }
             }
         }
@@ -299,9 +305,8 @@ class MainActivity : FragmentActivity(), Request.RequestListener, OnSharedPrefer
     fun fragmentReady(tag: String) {
         ready++
         Log.i(TAG, "ready $tag $ready ")
-        // 原来等 7 个 fragment ready；移除 Request 后实际只剩 6 个，
-        // 保守起见仍用 ready>=6 触发
-        if (ready >= 6) {
+        // loadingFragment 已恢复，共 7 个 fragment + 1 个 request = 8 次，用 >=7 触发
+        if (ready >= 7) {
             mainFragment.fragmentReady()
         }
     }
