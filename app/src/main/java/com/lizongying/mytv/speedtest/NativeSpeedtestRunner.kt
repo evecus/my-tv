@@ -91,8 +91,20 @@ object NativeSpeedtestRunner {
         stderrThread.isDaemon = true
         stderrThread.start()
 
+        // 持续 drain stdout，防止 Rust 进程的 print!/println! 写满管道缓冲区
+        // （~64 KB）后在 write() 处永久阻塞，导致测速卡死、流量归零。
+        // Rust 侧进度条已改用 eprint!，此处仅做兜底。
+        val stdoutThread = Thread {
+            try {
+                process.inputStream.copyTo(java.io.OutputStream.nullOutputStream())
+            } catch (_: Exception) {}
+        }
+        stdoutThread.isDaemon = true
+        stdoutThread.start()
+
         val exitCode = process.waitFor()
         stderrThread.join(2000)
+        stdoutThread.join(500)
 
         check(exitCode == 0) { "binary exited with code $exitCode" }
 
