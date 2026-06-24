@@ -31,12 +31,12 @@ object SpeedtestManager {
         "http://gh-proxy.com/raw.githubusercontent.com/suxuang/myIPTV/main/ipv4.m3u"
 
     private const val SPEED_LOW_MBPS  = 0.5          // MB/s 最低可用门槛
-    private const val HOST_TIMEOUT_MS = 15_000L       // 单 host 总超时
+    private const val HOST_TIMEOUT_MS = 5_000L       // 单 host 总超时
     private const val SUB_TIMEOUT_MS  = 10_000L       // 订阅文件下载超时
     private const val SPEED_TEST_MS   = 8_000L        // 测速最长持续时间
     private const val MAX_SPEED_BYTES = 10 * 1024 * 1024L  // 测速最多下载 10MB
-    private const val WORKERS         = 10            // 并发数
-    private const val TOP_N           = 5             // 每种类型最多保留几个源
+    private const val WORKERS         = 30            // 并发数
+    private const val TOP_N           = 10             // 每种类型最多保留几个源
 
     // ── 运行状态 ──────────────────────────────────────────────────
     private val isRunning = AtomicBoolean(false)
