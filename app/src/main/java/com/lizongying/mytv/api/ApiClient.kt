@@ -118,12 +118,16 @@ class ApiClient {
             try {
                 val sc = SSLContext.getInstance("TLSv1.2")
 
-                sc.init(null, null, null)
+                val tls12TrustAllCerts: Array<TrustManager> = arrayOf(
+                    object : X509TrustManager {
+                        override fun checkClientTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {}
+                        override fun checkServerTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {}
+                        override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = emptyArray()
+                    }
+                )
+                sc.init(null, tls12TrustAllCerts, null)
 
-                // a more robust version is to pass a custom X509TrustManager
-                // as the second parameter and make checkServerTrusted to accept your server.
-                // Credits: https://github.com/square/okhttp/issues/2372#issuecomment-1774955225
-                client.sslSocketFactory(Tls12SocketFactory(sc.socketFactory))
+                client.sslSocketFactory(Tls12SocketFactory(sc.socketFactory), tls12TrustAllCerts[0] as X509TrustManager)
 
                 val cs = ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
                     .tlsVersions(TlsVersion.TLS_1_2)
