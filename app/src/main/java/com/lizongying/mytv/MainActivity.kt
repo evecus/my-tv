@@ -18,12 +18,16 @@ import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
+import com.lizongying.mytv.models.TVList
 import com.lizongying.mytv.models.TVViewModel
 import com.lizongying.mytv.requests.Request
+import com.lizongying.mytv.speedtest.M3uParser
+import com.lizongying.mytv.speedtest.SpeedtestManager
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 
 class MainActivity : FragmentActivity(), Request.RequestListener, OnSharedPreferenceChangeListener {
@@ -137,6 +141,21 @@ class MainActivity : FragmentActivity(), Request.RequestListener, OnSharedPrefer
 //        }
 
         SP.setOnSharedPreferenceChangeListener(this)
+
+        // 加载本地频道列表
+        TVList.load(this)
+
+        // 首次安装（从未测过速）或用户开启了自动测速 → 后台自动跑一次
+        val neverTested = SP.lastSpeedtest == 0L
+        if (neverTested || SP.autoSpeedtest) {
+            lifecycleScope.launch(Dispatchers.IO) {
+                val count = SpeedtestManager.runSpeedtest(this@MainActivity)
+                if (count > 0) {
+                    SP.lastSpeedtest = System.currentTimeMillis()
+                    withContext(Dispatchers.Main) { reloadChannels() }
+                }
+            }
+        }
     }
 
     fun showInfoFragment(tvViewModel: TVViewModel) {
@@ -268,10 +287,21 @@ class MainActivity : FragmentActivity(), Request.RequestListener, OnSharedPrefer
         }
     }
 
+    /**
+     * 测速完成后调用：重新读取本地 m3u8 并刷新频道列表 UI。
+     */
+    fun reloadChannels() {
+        TVList.load(this)
+        mainFragment.buildChannelList()
+        Toast.makeText(this, "频道列表已更新", Toast.LENGTH_SHORT).show()
+    }
+
     fun fragmentReady(tag: String) {
         ready++
         Log.i(TAG, "ready $tag $ready ")
-        if (ready == 7) {
+        // 原来等 7 个 fragment ready；移除 Request 后实际只剩 6 个，
+        // 保守起见仍用 ready>=6 触发
+        if (ready >= 6) {
             mainFragment.fragmentReady()
         }
     }

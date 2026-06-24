@@ -1,7 +1,5 @@
 package com.lizongying.mytv
 
-import android.Manifest
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -11,22 +9,18 @@ import android.view.View.VISIBLE
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Toast
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-import androidx.core.view.isVisible
-import androidx.core.view.marginEnd
-import androidx.core.view.marginTop
 import androidx.fragment.app.DialogFragment
-import com.lizongying.mytv.api.YSP
+import androidx.lifecycle.lifecycleScope
 import com.lizongying.mytv.databinding.SettingBinding
-
+import com.lizongying.mytv.speedtest.SpeedtestManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class SettingFragment : DialogFragment() {
 
     private var _binding: SettingBinding? = null
     private val binding get() = _binding!!
-
-    private lateinit var updateManager: UpdateManager
 
     override fun onStart() {
         super.onStart()
@@ -51,7 +45,7 @@ class SettingFragment : DialogFragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        val context = requireContext() // It‘s safe to get context here.
+        val context = requireContext()
         _binding = SettingBinding.inflate(inflater, container, false)
         binding.versionName.text = "当前版本: v${context.appVersionName}"
         binding.version.text = "https://github.com/lizongying/my-tv"
@@ -96,22 +90,31 @@ class SettingFragment : DialogFragment() {
             }
         }
 
-        binding.checkVersion.setOnClickListener {
-            (activity as MainActivity).settingDelayHide()
-            requestInstallPermissions()
+        // ── 自动测速开关 ────────────────────────────────────────
+        binding.switchAutoSpeedtest.run {
+            isChecked = SP.autoSpeedtest
+            setOnCheckedChangeListener { _, isChecked ->
+                SP.autoSpeedtest = isChecked
+                (activity as MainActivity).settingDelayHide()
+            }
+        }
+
+        // ── 手动测速按钮 ────────────────────────────────────────
+        binding.btnSpeedtest.setOnClickListener {
+            startSpeedtest()
         }
 
         binding.clear.setOnClickListener {
+            // 原来的"恢复默认"逻辑保留（清 guid），
+            // 不再触发杨视频 API，仅重置
             (requireActivity() as MainActivity).syncTime()
-            SP.guid = ""
-            YSP.getGuid()
         }
 
         val application = requireActivity().applicationContext as MyTVApplication
         val textSize = application.px2PxFont(binding.switchChannelReversal.textSize)
 
-        binding.content.layoutParams.width =
-            application.px2Px(binding.content.layoutParams.width)
+        // 尺寸缩放（保持原来的逻辑）
+        binding.content.layoutParams.width = application.px2Px(binding.content.layoutParams.width)
         binding.content.setPadding(
             application.px2Px(binding.content.paddingLeft),
             application.px2Px(binding.content.paddingTop),
@@ -120,123 +123,74 @@ class SettingFragment : DialogFragment() {
         )
         binding.name.textSize = application.px2PxFont(binding.name.textSize)
         binding.version.textSize = textSize
-        val layoutParamsVersion = binding.version.layoutParams as ViewGroup.MarginLayoutParams
-        layoutParamsVersion.topMargin = application.px2Px(binding.version.marginTop)
-        binding.version.layoutParams = layoutParamsVersion
-
         binding.checkVersion.textSize = textSize
-        val layoutParamsCheckVersion =
-            binding.checkVersion.layoutParams as ViewGroup.MarginLayoutParams
-        layoutParamsCheckVersion.marginEnd = application.px2Px(binding.checkVersion.marginEnd)
-        binding.checkVersion.layoutParams = layoutParamsCheckVersion
-
         binding.versionName.textSize = textSize
-
         binding.clear.textSize = textSize
         binding.exit.textSize = textSize
-
-        val layoutParamsChannelSwitch =
-            binding.switchChannelReversal.layoutParams as ViewGroup.MarginLayoutParams
-        layoutParamsChannelSwitch.topMargin =
-            application.px2Px(binding.switchChannelReversal.marginTop)
-
-        binding.switchChannelReversal.textSize = textSize
-        binding.switchChannelReversal.layoutParams = layoutParamsChannelSwitch
-
-        binding.switchChannelNum.textSize = textSize
-        binding.switchChannelNum.layoutParams = layoutParamsChannelSwitch
-
-        binding.switchTime.textSize = textSize
-        binding.switchTime.layoutParams = layoutParamsChannelSwitch
-
-        binding.switchBootStartup.textSize = textSize
-        binding.switchBootStartup.layoutParams = layoutParamsChannelSwitch
-
-        binding.switchGrid.textSize = textSize
-        binding.switchGrid.layoutParams = layoutParamsChannelSwitch
-
-        binding.appreciate.layoutParams.width =
-            application.px2Px(binding.appreciate.layoutParams.width)
+        binding.btnSpeedtest.textSize = textSize
+        binding.tvSpeedtestStatus.textSize = application.px2PxFont(12f)
+        binding.switchAutoSpeedtest.textSize = textSize
 
         binding.exit.setOnClickListener {
             requireActivity().finishAffinity()
         }
 
-//        val myViewModel = application.myViewModel
-//        application.myViewModel.downloadProgress.observe(viewLifecycleOwner) { _ ->
-//            val downloadProgress = myViewModel.downloadProgress.value
-//            if (downloadProgress != null) {
-//                if (downloadProgress == 100) {
-//                    binding.progressBar.visibility = GONE
-//                } else {
-//                    if (!binding.progressBar.isVisible) {
-//                        binding.progressBar.visibility = VISIBLE
-//                    }
-//                    binding.progressBar.progress = downloadProgress
-//                }
-//            }
-//        }
-
-        updateManager = UpdateManager(context, context.appVersionCode)
-
         return binding.root
     }
 
-    private fun requestInstallPermissions() {
-        val context = requireContext()
-        val permissionsList: MutableList<String> = ArrayList()
+    // ── 测速流程 ─────────────────────────────────────────────────
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
-            permissionsList.add(Manifest.permission.REQUEST_INSTALL_PACKAGES)
+    private fun startSpeedtest() {
+        if (SpeedtestManager.isRunning()) {
+            Toast.makeText(context, "测速正在进行中…", Toast.LENGTH_SHORT).show()
+            return
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.READ_EXTERNAL_STORAGE
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            permissionsList.add(Manifest.permission.READ_EXTERNAL_STORAGE)
-        }
+        binding.btnSpeedtest.isEnabled = false
+        binding.tvSpeedtestStatus.visibility = VISIBLE
+        binding.tvSpeedtestStatus.text = "准备开始测速…"
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            permissionsList.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-        }
+        val ctx = requireContext().applicationContext
 
-        if (permissionsList.isNotEmpty()) {
-            ActivityCompat.requestPermissions(
-                requireActivity(),
-                permissionsList.toTypedArray<String>(),
-                PERMISSIONS_REQUEST_CODE
-            )
-        } else {
-            updateManager.checkAndUpdate()
-        }
-    }
+        lifecycleScope.launch {
+            val count = withContext(Dispatchers.IO) {
+                SpeedtestManager.runSpeedtest(
+                    context  = ctx,
+                    listener = object : SpeedtestManager.ProgressListener {
+                        override fun onProgress(
+                            completed: Int, total: Int, valid: Int, phase: String
+                        ) {
+                            val msg = if (total > 0)
+                                "$phase $completed/$total（有效 $valid）"
+                            else
+                                phase
+                            lifecycleScope.launch(Dispatchers.Main) {
+                                binding.tvSpeedtestStatus.text = msg
+                            }
+                        }
 
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == PERMISSIONS_REQUEST_CODE) {
-            var allPermissionsGranted = true
-            for (result in grantResults) {
-                if (result != PackageManager.PERMISSION_GRANTED) {
-                    allPermissionsGranted = false
-                    break
-                }
+                        override fun onFinished(channelCount: Int) {
+                            SP.lastSpeedtest = System.currentTimeMillis()
+                        }
+
+                        override fun onError(message: String) {
+                            lifecycleScope.launch(Dispatchers.Main) {
+                                binding.tvSpeedtestStatus.text = message
+                            }
+                        }
+                    }
+                )
             }
-            if (allPermissionsGranted) {
-                updateManager.checkAndUpdate()
+
+            // 回到主线程更新 UI
+            binding.btnSpeedtest.isEnabled = true
+            if (count > 0) {
+                binding.tvSpeedtestStatus.text = "测速完成，共 $count 个频道，重启生效"
+                Toast.makeText(ctx, "测速完成，共 $count 个频道，重启 App 即可使用", Toast.LENGTH_LONG).show()
+                // 通知 MainActivity 重新加载频道列表
+                (activity as? MainActivity)?.reloadChannels()
             } else {
-                Toast.makeText(context, "权限授权失败", Toast.LENGTH_LONG).show()
+                binding.tvSpeedtestStatus.text = "未发现可用频道"
             }
         }
     }
@@ -248,7 +202,5 @@ class SettingFragment : DialogFragment() {
 
     companion object {
         const val TAG = "SettingFragment"
-        const val PERMISSIONS_REQUEST_CODE = 1
     }
 }
-

@@ -118,4 +118,6 @@ dependencies {
     implementation(libs.serialization.json)
     implementation(libs.coroutines.android)
     implementation(libs.javax.annotation.api)
+    // 测速网络请求
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }

@@ -75,6 +75,29 @@
                 android:textSize="14sp"
                 android:text="@string/clear"
                 />
+            <!-- ── 测速区域 ────────────────────────────── -->
+            <Button
+                android:id="@+id/btn_speedtest"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="14sp"
+                android:text="@string/speedtest_start"
+                />
+            <TextView
+                android:id="@+id/tv_speedtest_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:text=""
+                android:visibility="gone"
+                />
+            <Switch
+                android:id="@+id/switch_auto_speedtest"
+                android:text="@string/title_auto_speedtest"
+                android:textSize="14sp"
+                android:layout_marginTop="5dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
             <Button
                 android:id="@+id/exit"
                 android:layout_width="wrap_content"

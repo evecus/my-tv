@@ -26,6 +26,12 @@ object SP {
     // guid
     private const val KEY_GUID = "guid"
 
+    // 是否启动后自动测速
+    const val KEY_AUTO_SPEEDTEST = "auto_speedtest"
+
+    // 上次测速时间（时间戳毫秒，0 表示从未测过）
+    private const val KEY_LAST_SPEEDTEST = "last_speedtest"
+
     private lateinit var sp: SharedPreferences
 
     private var listener: OnSharedPreferenceChangeListener? = null
@@ -78,4 +84,12 @@ object SP {
     var guid: String
         get() = sp.getString(KEY_GUID, "") ?: ""
         set(value) = sp.edit().putString(KEY_GUID, value).apply()
+
+    var autoSpeedtest: Boolean
+        get() = sp.getBoolean(KEY_AUTO_SPEEDTEST, false)
+        set(value) = sp.edit().putBoolean(KEY_AUTO_SPEEDTEST, value).apply()
+
+    var lastSpeedtest: Long
+        get() = sp.getLong(KEY_LAST_SPEEDTEST, 0L)
+        set(value) = sp.edit().putLong(KEY_LAST_SPEEDTEST, value).apply()
 }

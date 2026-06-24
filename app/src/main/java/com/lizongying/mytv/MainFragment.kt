@@ -13,26 +13,19 @@ import androidx.core.view.marginBottom
 import androidx.core.view.marginStart
 import androidx.core.view.marginTop
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.lizongying.mytv.api.YSP
 import com.lizongying.mytv.databinding.MenuBinding
 import com.lizongying.mytv.databinding.RowBinding
 import com.lizongying.mytv.models.ProgramType
 import com.lizongying.mytv.models.TVList
 import com.lizongying.mytv.models.TVListViewModel
 import com.lizongying.mytv.models.TVViewModel
-import com.lizongying.mytv.requests.Request
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-
 
 class MainFragment : Fragment(), CardAdapter.ItemListener {
 
     private var itemPosition = 0
-
     private var rowList: MutableList<View> = mutableListOf()
 
     private var _binding: MenuBinding? = null
@@ -43,7 +36,6 @@ class MainFragment : Fragment(), CardAdapter.ItemListener {
     private var lastVideoUrl = ""
 
     private lateinit var application: MyTVApplication
-
     private lateinit var gestureDetector: GestureDetector
 
     override fun onCreateView(
@@ -58,9 +50,7 @@ class MainFragment : Fragment(), CardAdapter.ItemListener {
         binding.menu.layoutParams.width = application.shouldWidthPx()
         binding.menu.layoutParams.height = application.shouldHeightPx()
 
-        binding.container.setOnClickListener {
-            hideSelf()
-        }
+        binding.container.setOnClickListener { hideSelf() }
 
         gestureDetector = GestureDetector(context, GestureListener())
 
@@ -69,7 +59,6 @@ class MainFragment : Fragment(), CardAdapter.ItemListener {
 
     private inner class GestureListener : GestureDetector.SimpleOnGestureListener() {
         override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-            Log.i(TAG, "onSingleTapConfirmed")
             hideSelf()
             return true
         }
@@ -77,116 +66,109 @@ class MainFragment : Fragment(), CardAdapter.ItemListener {
 
     private fun hideSelf() {
         requireActivity().supportFragmentManager.beginTransaction()
-            .hide(this)
-            .commit()
+            .hide(this).commit()
     }
 
+    @Deprecated("Deprecated in Java")
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         super.onActivityCreated(savedInstanceState)
 
-        activity?.let { YSP.init(it) }
-
         itemPosition = SP.itemPosition
+
+        buildChannelList()
+    }
+
+    /**
+     * 根据 TVList.list 构建频道行列表。
+     * 可在测速完成后再次调用以刷新 UI（需先 TVList.load()）。
+     */
+    fun buildChannelList() {
+        // 清除旧数据
+        tvListViewModel = TVListViewModel()
+        rowList.clear()
 
         view?.post {
             val content = binding.content
+            content.removeAllViews()
 
-            var idx: Long = 0
+            if (TVList.isEmpty()) {
+                (activity as MainActivity).fragmentReady(TAG)
+                return@post
+            }
+
+            var rowIdx: Long = 0
             for ((k, v) in TVList.list) {
-                val itemBinding: RowBinding =
-                    RowBinding.inflate(layoutInflater, content, false)
+                val itemBinding = RowBinding.inflate(layoutInflater, content, false)
+                val rowViewModel = TVListViewModel()
 
-                val tvListViewModelCurrent = TVListViewModel()
-                for ((idx2, v1) in v.withIndex()) {
-                    val tvViewModel = TVViewModel(v1)
-                    tvViewModel.setRowPosition(idx.toInt())
+                for ((idx2, tv) in v.withIndex()) {
+                    val tvViewModel = TVViewModel(tv)
+                    tvViewModel.setRowPosition(rowIdx.toInt())
                     tvViewModel.setItemPosition(idx2)
-                    tvListViewModelCurrent.addTVViewModel(tvViewModel)
+                    rowViewModel.addTVViewModel(tvViewModel)
                     tvListViewModel.addTVViewModel(tvViewModel)
                 }
                 tvListViewModel.maxNum.add(v.size)
 
-                val adapter =
-                    CardAdapter(
-                        itemBinding.items,
-                        this,
-                        tvListViewModelCurrent,
-                    )
+                val adapter = CardAdapter(itemBinding.items, this, rowViewModel)
                 rowList.add(itemBinding.items)
-
                 adapter.setItemListener(this)
 
                 itemBinding.header.text = k
-                itemBinding.items.tag = idx.toInt()
+                itemBinding.items.tag = rowIdx.toInt()
                 itemBinding.items.adapter = adapter
 
                 itemBinding.items.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                    override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                        super.onScrolled(recyclerView, dx, dy)
+                    override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
                         (activity as MainActivity).mainActive()
                     }
                 })
 
-                val itemDecoration = context?.let { ItemDecoration(it) }
-                if (itemDecoration != null) {
-                    itemBinding.items.addItemDecoration(itemDecoration)
+                context?.let { ctx ->
+                    val decoration = ItemDecoration(ctx)
+                    itemBinding.items.addItemDecoration(decoration)
                 }
 
                 if (SP.grid) {
-                    itemBinding.items.layoutManager =
-                        GridLayoutManager(context, 6)
+                    itemBinding.items.layoutManager = GridLayoutManager(context, 6)
                     itemBinding.items.layoutParams.height =
-                        application.dp2Px(110 * ((tvListViewModelCurrent.size() + 6 - 1) / 6) + 5)
+                        application.dp2Px(110 * ((rowViewModel.size() + 5) / 6) + 5)
                 } else {
                     itemBinding.items.layoutManager =
                         LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
                 }
 
-                val layoutParams = itemBinding.row.layoutParams as ViewGroup.MarginLayoutParams
-                layoutParams.topMargin = application.dp2Px(11)
-                itemBinding.row.layoutParams = layoutParams
-                itemBinding.row.setOnClickListener {
-                    hideSelf()
-                }
+                val lp = itemBinding.row.layoutParams as ViewGroup.MarginLayoutParams
+                lp.topMargin = application.dp2Px(11)
+                itemBinding.row.layoutParams = lp
+                itemBinding.row.setOnClickListener { hideSelf() }
 
                 itemBinding.items.addOnItemTouchListener(object : RecyclerView.OnItemTouchListener {
                     override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
                         gestureDetector.onTouchEvent(e)
                         return false
                     }
-
-                    override fun onTouchEvent(rv: RecyclerView, e: MotionEvent) {
-                        TODO("Not yet implemented")
-                    }
-
-                    override fun onRequestDisallowInterceptTouchEvent(disallowIntercept: Boolean) {
-                        TODO("Not yet implemented")
-                    }
+                    override fun onTouchEvent(rv: RecyclerView, e: MotionEvent) {}
+                    override fun onRequestDisallowInterceptTouchEvent(b: Boolean) {}
                 })
 
-                val layoutParamsHeader =
-                    itemBinding.header.layoutParams as ViewGroup.MarginLayoutParams
-                layoutParamsHeader.topMargin = application.px2Px(itemBinding.header.marginTop)
-                layoutParamsHeader.bottomMargin = application.px2Px(itemBinding.header.marginBottom)
-                layoutParamsHeader.marginStart = application.px2Px(itemBinding.header.marginStart)
-                itemBinding.header.layoutParams = layoutParamsHeader
+                val headerLp = itemBinding.header.layoutParams as ViewGroup.MarginLayoutParams
+                headerLp.topMargin    = application.px2Px(itemBinding.header.marginTop)
+                headerLp.bottomMargin = application.px2Px(itemBinding.header.marginBottom)
+                headerLp.marginStart  = application.px2Px(itemBinding.header.marginStart)
+                itemBinding.header.layoutParams = headerLp
                 itemBinding.header.textSize = application.px2PxFont(itemBinding.header.textSize)
 
                 content.addView(itemBinding.row)
-
-                idx++
+                rowIdx++
             }
 
-            if (itemPosition >= tvListViewModel.size()) {
-                itemPosition = 0
-            }
+            if (itemPosition >= tvListViewModel.size()) itemPosition = 0
 
             tvListViewModel.setItemPosition(itemPosition)
             tvListViewModel.tvListViewModel.value?.forEach { tvViewModel ->
                 tvViewModel.errInfo.observe(viewLifecycleOwner) { _ ->
-                    if (tvViewModel.errInfo.value != null
-                        && tvViewModel.getTV().id == itemPosition
-                    ) {
+                    if (tvViewModel.getTV().id == itemPosition) {
                         if (tvViewModel.errInfo.value == "") {
                             (activity as? MainActivity)?.showPlayerFragment()
                             (activity as? MainActivity)?.hideErrorFragment()
@@ -194,42 +176,31 @@ class MainFragment : Fragment(), CardAdapter.ItemListener {
                         } else {
                             (activity as? MainActivity)?.hidePlayerFragment()
                             (activity as? MainActivity)?.hideLoadingFragment()
-                            (activity as? MainActivity)?.showErrorFragment(tvViewModel.errInfo.value.toString())
+                            (activity as? MainActivity)?.showErrorFragment(
+                                tvViewModel.errInfo.value.toString()
+                            )
                         }
                     }
                 }
                 tvViewModel.ready.observe(viewLifecycleOwner) { _ ->
-
-                    // not first time && channel not change
                     if (tvViewModel.ready.value != null
                         && tvViewModel.getTV().id == itemPosition
                         && check(tvViewModel)
                     ) {
-                        Log.i(TAG, "ready ${tvViewModel.getTV().title}")
                         (activity as? MainActivity)?.play(tvViewModel)
                     }
                 }
                 tvViewModel.change.observe(viewLifecycleOwner) { _ ->
                     if (tvViewModel.change.value != null) {
-                        val title = tvViewModel.getTV().title
-                        Log.i(TAG, "switch $title")
-                        if (tvViewModel.getTV().pid != "") {
-                            Log.i(TAG, "request $title")
-                            lifecycleScope.launch(Dispatchers.IO) {
-                                tvViewModel.let { Request.fetchData(it) }
-                            }
-                            (activity as? MainActivity)?.showInfoFragment(tvViewModel)
-                            setPosition(
-                                tvViewModel.getRowPosition(), tvViewModel.getItemPosition()
-                            )
-                        } else {
+                        // CUSTOM 类型直接播放，无需请求 token
+                        if (tvViewModel.getTV().programType == ProgramType.CUSTOM) {
+                            val url = tvViewModel.getTV().videoUrl.firstOrNull() ?: return@observe
+                            tvViewModel.addVideoUrl(url)
+                            tvViewModel.allReady()
                             if (check(tvViewModel)) {
-                                // TODO lastVideoUrl
                                 (activity as? MainActivity)?.play(tvViewModel)
                                 (activity as? MainActivity)?.showInfoFragment(tvViewModel)
-                                setPosition(
-                                    tvViewModel.getRowPosition(), tvViewModel.getItemPosition()
-                                )
+                                setPosition(tvViewModel.getRowPosition(), tvViewModel.getItemPosition())
                             }
                         }
                     }
@@ -245,7 +216,7 @@ class MainFragment : Fragment(), CardAdapter.ItemListener {
                 if (i is RecyclerView) {
                     i.layoutManager = GridLayoutManager(context, 6)
                     i.layoutParams.height =
-                        application.dp2Px(110 * (((i.adapter as CardAdapter).getItemCount() + 6 - 1) / 6) + 5)
+                        application.dp2Px(110 * (((i.adapter as CardAdapter).getItemCount() + 5) / 6) + 5)
                 }
             }
         } else {
@@ -253,7 +224,7 @@ class MainFragment : Fragment(), CardAdapter.ItemListener {
                 if (i is RecyclerView) {
                     i.layoutManager =
                         LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
-                    i.layoutParams.height = application.dp2Px(110 + 5)
+                    i.layoutParams.height = application.dp2Px(115)
                 }
             }
         }
@@ -262,15 +233,8 @@ class MainFragment : Fragment(), CardAdapter.ItemListener {
     override fun onKey(keyCode: Int): Boolean {
         if (this.isHidden) {
             when (keyCode) {
-                KeyEvent.KEYCODE_DPAD_UP -> {
-                    (activity as MainActivity).onKey(keyCode)
-                    return true
-                }
-
-                KeyEvent.KEYCODE_DPAD_DOWN -> {
-                    (activity as MainActivity).onKey(keyCode)
-                    return true
-                }
+                KeyEvent.KEYCODE_DPAD_UP   -> { (activity as MainActivity).onKey(keyCode); return true }
+                KeyEvent.KEYCODE_DPAD_DOWN -> { (activity as MainActivity).onKey(keyCode); return true }
             }
         }
         return false
@@ -278,16 +242,11 @@ class MainFragment : Fragment(), CardAdapter.ItemListener {
 
     override fun onItemHasFocus(tvViewModel: TVViewModel) {
         val row = tvViewModel.getRowPosition()
-
         for (i in rowList) {
-            if (i.tag as Int != row) {
-                ((i as RecyclerView).adapter as CardAdapter).focusable = false
-                (i.adapter as CardAdapter).clear()
-            } else {
-                ((i as RecyclerView).adapter as CardAdapter).focusable = true
-            }
+            val adapter = (i as RecyclerView).adapter as CardAdapter
+            if (i.tag as Int != row) { adapter.focusable = false; adapter.clear() }
+            else adapter.focusable = true
         }
-
         (activity as MainActivity).mainActive()
     }
 
@@ -296,68 +255,44 @@ class MainFragment : Fragment(), CardAdapter.ItemListener {
             (activity as? MainActivity)?.switchMainFragment()
             return
         }
-
         if (itemPosition != tvViewModel.getTV().id) {
             itemPosition = tvViewModel.getTV().id
             tvListViewModel.setItemPosition(itemPosition)
             tvListViewModel.getTVViewModel(itemPosition)?.changed("menu")
-            Log.i(TAG, "onItemClicked ${tvViewModel.getTV().id}")
         }
         (activity as? MainActivity)?.switchMainFragment()
     }
 
     fun setPosition() {
-        val tvViewModel = tvListViewModel.getTVViewModel(itemPosition) ?: return
-        val rowPosition = tvViewModel.getRowPosition()
-        val itemPosition = tvViewModel.getItemPosition()
-        setPosition(rowPosition, itemPosition)
+        val vm = tvListViewModel.getTVViewModel(itemPosition) ?: return
+        setPosition(vm.getRowPosition(), vm.getItemPosition())
     }
 
     fun setPosition(rowPosition: Int, itemPosition: Int) {
+        if (rowPosition >= rowList.size) return
         rowList[rowPosition].post {
-            when (val layoutManager = (rowList[rowPosition] as RecyclerView).layoutManager) {
-                is GridLayoutManager -> {
-                    layoutManager.findViewByPosition(
-                        itemPosition
-                    )?.requestFocus()
-                }
-
-                is LinearLayoutManager -> {
-                    layoutManager.findViewByPosition(
-                        itemPosition
-                    )?.requestFocus()
-                }
+            when (val lm = (rowList[rowPosition] as RecyclerView).layoutManager) {
+                is GridLayoutManager   -> lm.findViewByPosition(itemPosition)?.requestFocus()
+                is LinearLayoutManager -> lm.findViewByPosition(itemPosition)?.requestFocus()
             }
         }
     }
 
     fun check(tvViewModel: TVViewModel): Boolean {
-        val title = tvViewModel.getTV().title
         val videoUrl = tvViewModel.videoIndex.value?.let { tvViewModel.videoUrl.value?.get(it) }
-        if (videoUrl == null || videoUrl == "") {
-            Log.e(TAG, "$title videoUrl is empty")
-            return false
-        }
-
-        if (videoUrl == lastVideoUrl) {
-            Log.e(TAG, "$title videoUrl is duplication")
-            return false
-        }
-
+        if (videoUrl.isNullOrEmpty()) return false
+        if (videoUrl == lastVideoUrl) return false
         return true
     }
 
     fun fragmentReady() {
+        if (TVList.isEmpty()) return
         tvListViewModel.getTVViewModel(itemPosition)?.changed("init")
-
-        tvListViewModel.tvListViewModel.value?.forEach { tvViewModel ->
-            updateEPG(tvViewModel)
-        }
     }
 
     fun play(itemPosition: Int) {
         view?.post {
-            if (itemPosition > -1 && itemPosition < tvListViewModel.size()) {
+            if (itemPosition in 0 until tvListViewModel.size()) {
                 this.itemPosition = itemPosition
                 tvListViewModel.setItemPosition(itemPosition)
                 tvListViewModel.getTVViewModel(itemPosition)?.changed("num")
@@ -369,10 +304,7 @@ class MainFragment : Fragment(), CardAdapter.ItemListener {
 
     fun prev() {
         view?.post {
-            itemPosition--
-            if (itemPosition == -1) {
-                itemPosition = tvListViewModel.size() - 1
-            }
+            itemPosition = if (itemPosition == 0) tvListViewModel.size() - 1 else itemPosition - 1
             tvListViewModel.setItemPosition(itemPosition)
             tvListViewModel.getTVViewModel(itemPosition)?.changed("prev")
         }
@@ -380,48 +312,25 @@ class MainFragment : Fragment(), CardAdapter.ItemListener {
 
     fun next() {
         view?.post {
-            itemPosition++
-            if (itemPosition == tvListViewModel.size()) {
-                itemPosition = 0
-            }
+            itemPosition = (itemPosition + 1) % tvListViewModel.size()
             tvListViewModel.setItemPosition(itemPosition)
             tvListViewModel.getTVViewModel(itemPosition)?.changed("next")
         }
     }
 
-    private fun updateEPG(tvViewModel: TVViewModel) {
-        when (tvViewModel.getTV().programType) {
-            ProgramType.Y_PROTO -> {
-                Request.fetchYProtoEPG(tvViewModel)
-            }
-
-            ProgramType.Y_JCE -> {
-                Request.fetchYJceEPG(tvViewModel)
-            }
-
-            ProgramType.F -> {
-                Request.fetchFEPG(tvViewModel)
-            }
-        }
-    }
-
-    fun shouldHasFocus(tvModel: TVViewModel): Boolean {
-        return tvModel == tvListViewModel.getTVViewModel(itemPosition)
-    }
+    fun shouldHasFocus(tvModel: TVViewModel) =
+        tvModel == tvListViewModel.getTVViewModel(itemPosition)
 
     override fun onHiddenChanged(hidden: Boolean) {
-        Log.i(TAG, "onHiddenChanged $hidden")
         super.onHiddenChanged(hidden)
         if (!hidden) {
-            val tvModel = tvListViewModel.getTVViewModel(itemPosition)
-            val rowPosition = tvModel?.getRowPosition()
-            val itemPosition = tvModel?.getItemPosition()
-            Log.i(TAG, "toPosition $rowPosition $itemPosition")
+            val vm = tvListViewModel.getTVViewModel(itemPosition) ?: return
             for (i in rowList) {
-                if (i.tag as Int == rowPosition) {
-                    ((i as RecyclerView).adapter as CardAdapter).updateEPG()
-                    (i.adapter as CardAdapter).focusable = true
-                    (i.adapter as CardAdapter).toPosition(itemPosition!!)
+                if (i.tag as Int == vm.getRowPosition()) {
+                    val adapter = (i as RecyclerView).adapter as CardAdapter
+                    adapter.updateEPG()
+                    adapter.focusable = true
+                    adapter.toPosition(vm.getItemPosition())
                     break
                 }
             }
@@ -434,24 +343,12 @@ class MainFragment : Fragment(), CardAdapter.ItemListener {
         }
     }
 
-    override fun onResume() {
-        Log.i(TAG, "onResume")
-        super.onResume()
-    }
-
-    override fun onDestroy() {
-        Log.i(TAG, "onDestroy")
-        super.onDestroy()
-    }
-
     override fun onDestroyView() {
-        Log.i(TAG, "onDestroyView")
         super.onDestroyView()
         _binding = null
     }
 
     companion object {
         private const val TAG = "MainFragment"
-        private const val POSITION = "position"
     }
 }
