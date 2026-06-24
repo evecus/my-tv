@@ -1,0 +1,114 @@
+name: build speedtest so
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.abi }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target:   aarch64-linux-android
+            abi:      arm64-v8a
+            cc:       aarch64-linux-android21-clang
+          - target:   armv7-linux-androideabi
+            abi:      armeabi-v7a
+            cc:       armv7a-linux-androideabi21-clang
+          - target:   x86_64-linux-android
+            abi:      x86_64
+            cc:       x86_64-linux-android21-clang
+          - target:   i686-linux-android
+            abi:      x86
+            cc:       i686-linux-android21-clang
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            iptv-speedtest/target
+          key: cargo-${{ matrix.target }}-${{ hashFiles('iptv-speedtest/Cargo.lock') }}
+          restore-keys: cargo-${{ matrix.target }}-
+
+      - name: Install NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+          add-to-path: false
+
+      - name: Configure linker
+        run: |
+          TOOLCHAIN=${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin
+          CC=$TOOLCHAIN/${{ matrix.cc }}
+          mkdir -p iptv-speedtest/.cargo
+          cat > iptv-speedtest/.cargo/config.toml << TOML
+          [target.${{ matrix.target }}]
+          linker = "$CC"
+          TOML
+          # cc-rs 用下划线形式
+          KEY=$(echo "CC_${{ matrix.target }}" | tr '-' '_')
+          echo "$KEY=$CC" >> "$GITHUB_ENV"
+          echo "AR_$(echo '${{ matrix.target }}' | tr '-' '_')=$TOOLCHAIN/llvm-ar" >> "$GITHUB_ENV"
+
+      - name: Build
+        working-directory: iptv-speedtest
+        run: |
+          cargo build \
+            --no-default-features \
+            --features android \
+            --target ${{ matrix.target }} \
+            --profile release-android
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: so-${{ matrix.abi }}
+          path: iptv-speedtest/target/${{ matrix.target }}/release-android/iptv_speedtest
+
+  commit:
+    name: commit to jniLibs
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Copy to jniLibs
+        run: |
+          for abi in arm64-v8a armeabi-v7a x86_64 x86; do
+            dest=app/src/main/jniLibs/$abi/libiptv_speedtest.so
+            src=dist/so-$abi/iptv_speedtest
+            if [ -f "$src" ]; then
+              cp "$src" "$dest"
+              chmod +x "$dest"
+              echo "✓ $dest ($(du -h $dest | cut -f1))"
+            else
+              echo "✗ missing: $src"
+              exit 1
+            fi
+          done
+
+      - name: Commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/jniLibs/
+          git diff --cached --quiet && echo "no changes" && exit 0
+          git commit -m "chore: update libiptv_speedtest.so [skip ci]"
+          git push
