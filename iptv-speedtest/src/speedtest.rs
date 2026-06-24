@@ -367,6 +367,9 @@ pub async fn run_api_speed_tests(
 }
 
 /// 进度条打印
+///
+/// 必须写到 stderr：Kotlin 侧只消费 stderr，stdout 管道若无人读取
+/// 会在缓冲区满（~64 KB）后导致 write() 永久阻塞，使整个测速卡死。
 pub fn print_progress(completed: usize, total: usize, success: usize) {
     if total == 0 {
         return;
@@ -375,8 +378,8 @@ pub fn print_progress(completed: usize, total: usize, success: usize) {
     let ratio = completed as f64 / total as f64;
     let filled = (bw as f64 * ratio) as usize;
     let bar = format!("{}{}", "=".repeat(filled), "-".repeat(bw - filled));
-    print!(
-        "\r测速进度 [{}] {}/{} ({:5.1}%) 有效源: {}",
+    eprint!(
+        "\r[android] 测速进度 [{}] {}/{} ({:5.1}%) 有效源: {}",
         bar,
         completed,
         total,
@@ -384,7 +387,7 @@ pub fn print_progress(completed: usize, total: usize, success: usize) {
         success
     );
     use std::io::Write;
-    let _ = std::io::stdout().flush();
+    let _ = std::io::stderr().flush();
 }
 
 /// 为订阅源测速（每个主机测一个样本 URL）
