@@ -96,7 +96,9 @@ object NativeSpeedtestRunner {
         // Rust 侧进度条已改用 eprint!，此处仅做兜底。
         val stdoutThread = Thread {
             try {
-                process.inputStream.copyTo(java.io.OutputStream.nullOutputStream())
+                val buf = ByteArray(8192)
+                val ins = process.inputStream
+                while (ins.read(buf) != -1) { /* drain，防止管道缓冲区阻塞 */ }
             } catch (_: Exception) {}
         }
         stdoutThread.isDaemon = true
