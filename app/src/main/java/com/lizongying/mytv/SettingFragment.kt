@@ -4,18 +4,14 @@ import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
-import android.view.View.GONE
-import android.view.View.VISIBLE
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.lifecycleScope
 import com.lizongying.mytv.databinding.SettingBinding
-import com.lizongying.mytv.speedtest.SpeedtestManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class SettingFragment : DialogFragment() {
 
@@ -128,7 +124,6 @@ class SettingFragment : DialogFragment() {
         binding.clear.textSize = textSize
         binding.exit.textSize = textSize
         binding.btnSpeedtest.textSize = textSize
-        binding.tvSpeedtestStatus.textSize = application.px2PxFont(12f)
         binding.switchAutoSpeedtest.textSize = textSize
 
         binding.exit.setOnClickListener {
@@ -141,58 +136,7 @@ class SettingFragment : DialogFragment() {
     // ── 测速流程 ─────────────────────────────────────────────────
 
     private fun startSpeedtest() {
-        if (SpeedtestManager.isRunning()) {
-            Toast.makeText(context, "测速正在进行中…", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        binding.btnSpeedtest.isEnabled = false
-        binding.tvSpeedtestStatus.visibility = VISIBLE
-        binding.tvSpeedtestStatus.text = "准备开始测速…"
-
-        val ctx = requireContext().applicationContext
-
-        lifecycleScope.launch {
-            val count = withContext(Dispatchers.IO) {
-                SpeedtestManager.runSpeedtest(
-                    context  = ctx,
-                    listener = object : SpeedtestManager.ProgressListener {
-                        override fun onProgress(
-                            completed: Int, total: Int, valid: Int, phase: String
-                        ) {
-                            val msg = if (total > 0)
-                                "$phase $completed/$total（有效 $valid）"
-                            else
-                                phase
-                            lifecycleScope.launch(Dispatchers.Main) {
-                                binding.tvSpeedtestStatus.text = msg
-                            }
-                        }
-
-                        override fun onFinished(channelCount: Int) {
-                            SP.lastSpeedtest = System.currentTimeMillis()
-                        }
-
-                        override fun onError(message: String) {
-                            lifecycleScope.launch(Dispatchers.Main) {
-                                binding.tvSpeedtestStatus.text = message
-                            }
-                        }
-                    }
-                )
-            }
-
-            // 回到主线程更新 UI
-            binding.btnSpeedtest.isEnabled = true
-            if (count > 0) {
-                binding.tvSpeedtestStatus.text = "测速完成，共 $count 个频道，重启生效"
-                Toast.makeText(ctx, "测速完成，共 $count 个频道，重启 App 即可使用", Toast.LENGTH_LONG).show()
-                // 通知 MainActivity 重新加载频道列表
-                (activity as? MainActivity)?.reloadChannels()
-            } else {
-                binding.tvSpeedtestStatus.text = "未发现可用频道"
-            }
-        }
+        SpeedtestDialogFragment.show(requireActivity() as MainActivity)
     }
 
     override fun onDestroyView() {
