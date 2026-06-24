@@ -22,12 +22,10 @@ import com.lizongying.mytv.models.TVList
 import com.lizongying.mytv.models.TVViewModel
 import com.lizongying.mytv.requests.Request
 import com.lizongying.mytv.speedtest.M3uParser
-import com.lizongying.mytv.speedtest.SpeedtestManager
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 
 class MainActivity : FragmentActivity(), Request.RequestListener, OnSharedPreferenceChangeListener {
@@ -146,21 +144,10 @@ class MainActivity : FragmentActivity(), Request.RequestListener, OnSharedPrefer
         // 加载本地频道列表
         TVList.load(this)
 
-        // 首次安装（从未测过速）或用户开启了自动测速 → 后台自动跑一次
+        // 首次安装（从未测过速）或用户开启了自动测速 → 弹出测速进度窗口
         val neverTested = SP.lastSpeedtest == 0L
         if (neverTested || SP.autoSpeedtest) {
-            // 测速期间显示 loading，避免黑屏
-            showLoadingFragment()
-            lifecycleScope.launch(Dispatchers.IO) {
-                val count = SpeedtestManager.runSpeedtest(this@MainActivity)
-                withContext(Dispatchers.Main) {
-                    hideLoadingFragment()
-                    if (count > 0) {
-                        SP.lastSpeedtest = System.currentTimeMillis()
-                        reloadChannels()
-                    }
-                }
-            }
+            SpeedtestDialogFragment.show(this)
         }
     }
 
