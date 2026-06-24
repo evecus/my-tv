@@ -36,7 +36,6 @@ jobs:
           keyPassword: ${{ secrets.ALIAS_PASSWORD }}
         env:
           BUILD_TOOLS_VERSION: "34.0.0"
-          # 只签 arm64 这一个文件
           INPUT_RELEASEFILE: app/build/outputs/apk/release/mytv-*-arm64-v8a.apk
 
       # ── 签名 armeabi-v7a ──────────────────────────────────────────
@@ -53,16 +52,50 @@ jobs:
           BUILD_TOOLS_VERSION: "34.0.0"
           INPUT_RELEASEFILE: app/build/outputs/apk/release/mytv-*-armeabi-v7a.apk
 
+      # ── 签名 x86_64 ───────────────────────────────────────────────
+      - name: Sign x86_64 APK
+        id: sign_x86_64
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.KEYSTORE }}
+          alias: ${{ secrets.ALIAS }}
+          keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ALIAS_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "34.0.0"
+          INPUT_RELEASEFILE: app/build/outputs/apk/release/mytv-*-x86_64.apk
+
+      # ── 签名 x86 ─────────────────────────────────────────────────
+      - name: Sign x86 APK
+        id: sign_x86
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.KEYSTORE }}
+          alias: ${{ secrets.ALIAS }}
+          keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ALIAS_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "34.0.0"
+          INPUT_RELEASEFILE: app/build/outputs/apk/release/mytv-*-x86.apk
+
       # ── 找到签名后的文件路径 ──────────────────────────────────────
       - name: Locate signed APKs
         id: locate
         run: |
           ARM64=$(ls app/build/outputs/apk/release/*arm64-v8a*-signed.apk 2>/dev/null | head -1)
           ARM32=$(ls app/build/outputs/apk/release/*armeabi-v7a*-signed.apk 2>/dev/null | head -1)
+          X86_64=$(ls app/build/outputs/apk/release/*x86_64*-signed.apk 2>/dev/null | head -1)
+          X86=$(ls app/build/outputs/apk/release/*x86*-signed.apk 2>/dev/null | grep -v x86_64 | head -1)
           echo "arm64=$ARM64" >> $GITHUB_OUTPUT
           echo "arm32=$ARM32" >> $GITHUB_OUTPUT
+          echo "x86_64=$X86_64" >> $GITHUB_OUTPUT
+          echo "x86=$X86" >> $GITHUB_OUTPUT
           echo "arm64 apk: $ARM64"
           echo "arm32 apk: $ARM32"
+          echo "x86_64 apk: $X86_64"
+          echo "x86 apk: $X86"
 
       - name: Get History
         id: get_history
@@ -103,4 +136,26 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ${{ steps.locate.outputs.arm32 }}
           asset_name: my-tv-armeabi-v7a.apk
+          asset_content_type: application/vnd.android.package-archive
+
+      # ── 上传 x86_64 ───────────────────────────────────────────────
+      - name: Upload x86_64 APK
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.locate.outputs.x86_64 }}
+          asset_name: my-tv-x86_64.apk
+          asset_content_type: application/vnd.android.package-archive
+
+      # ── 上传 x86 ─────────────────────────────────────────────────
+      - name: Upload x86 APK
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.locate.outputs.x86 }}
+          asset_name: my-tv-x86.apk
           asset_content_type: application/vnd.android.package-archive
