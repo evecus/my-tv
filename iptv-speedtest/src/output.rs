@@ -57,11 +57,7 @@ pub fn build_and_write(
             }
         }
     }
-    // 末尾写入更新时间占位条目（播放器可忽略）
-    lines.push(format!(
-        "#EXTINF:-1 group-title=\"更新时间\",更新时间: {}\nhttp://127.0.0.1/",
-        ts
-    ));
+    // 更新时间仅保留在文件头注释中，不再生成独立分组条目
 
     let m3u8 = lines.join("\n");
     eprintln!(
