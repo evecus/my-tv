@@ -14,31 +14,37 @@ object NativeSpeedtestRunner {
 
     private const val TAG = "NativeSpeedtestRunner"
     private const val SO_NAME  = "libiptv_speedtest.so"
-    private const val BIN_NAME = "iptv_speedtest"
 
     /**
-     * 将 so 从 nativeLibraryDir 复制到 filesDir 并赋予执行权限。
-     * 已存在且大小相同时跳过。
+     * 直接定位 nativeLibraryDir 下系统已解压好的二进制，不做任何复制。
+     *
+     * Android 10 (API 29) 起引入了 W^X 限制：只有 APK 安装时系统解压到
+     * nativeLibraryDir 的文件才带有 SELinux 执行权限（apk_data_file 上下
+     * 文，可执行）。任何 App 自己复制到 filesDir / cacheDir 等私有目录的
+     * 文件，哪怕 chmod 设置了 +x，exec() 时依然会被 SELinux 拦截
+     * （EACCES / Permission denied）。低版本 Android 没有这个限制，所以
+     * 同一份代码在低版本能跑、在 Android 10+ 上必然失败。
+     *
+     * 解决办法就是像 adb/fastboot 二进制常见做法一样：不复制，直接从
+     * nativeLibraryDir 执行。前提是 build.gradle 里 jniLibs 用
+     * useLegacyPackaging（不压缩）打包，否则系统不会把它解压出来。
+     *
      * @return 可执行文件绝对路径
      */
     fun prepare(context: Context): String {
-        val src  = File(context.applicationInfo.nativeLibraryDir, SO_NAME)
-        val dest = File(context.filesDir, BIN_NAME)
+        val bin = File(context.applicationInfo.nativeLibraryDir, SO_NAME)
 
-        if (!src.exists()) {
-            error("native binary not found: ${src.absolutePath}")
+        if (!bin.exists()) {
+            error("native binary not found: ${bin.absolutePath}")
         }
 
-        if (!dest.exists() || dest.length() != src.length()) {
-            Log.i(TAG, "copying binary → ${dest.absolutePath}")
-            src.copyTo(dest, overwrite = true)
+        // 理论上系统解压时已经带有执行权限，这里仅做兜底校验/重置，
+        // 不涉及"复制到其它目录"这一步。
+        if (!bin.canExecute()) {
+            bin.setExecutable(true, true)
         }
 
-        if (!dest.canExecute()) {
-            dest.setExecutable(true, true)
-        }
-
-        return dest.absolutePath
+        return bin.absolutePath
     }
 
     /**
@@ -74,6 +80,14 @@ object NativeSpeedtestRunner {
         Log.i(TAG, "exec: ${cmd.joinToString(" ")}")
 
         val process = ProcessBuilder(cmd)
+            .apply {
+                // nativeLibraryDir 本身只读，二进制内部如果用到 HOME/TMPDIR
+                // （临时文件、缓存等），缺省值在 Android 上可能不存在或不可写，
+                // 导致进程启动后内部出错退出。显式指到 filesDir/cacheDir——
+                // 这两个目录本身可写，W^X 限制的是"执行"，不影响"读写"。
+                environment()["HOME"]   = context.filesDir.absolutePath
+                environment()["TMPDIR"] = context.cacheDir.absolutePath
+            }
             .redirectErrorStream(false)
             .start()
 
