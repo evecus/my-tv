@@ -1,0 +1,107 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.lizongying.mytv'
+    compileSdk 35
+
+    viewBinding {
+        enabled = true
+    }
+
+    defaultConfig {
+        applicationId "com.lizongying.mytv"
+        minSdk 21
+        targetSdk 35
+        versionCode VersionCode()
+        versionName VersionName()
+
+        multiDexEnabled true
+    }
+
+    // 每个 ABI 单独输出一个 APK
+    splits {
+        abi {
+            enable true
+            reset()
+            include "armeabi-v7a", "arm64-v8a", "x86_64", "x86"
+            universalApk false
+        }
+    }
+
+    applicationVariants.configureEach { variant ->
+        variant.outputs.configureEach { output ->
+            def abiCode = ['armeabi-v7a': 1, 'arm64-v8a': 2, 'x86_64': 3, 'x86': 4]
+            def abi = output.getFilter(com.android.build.OutputFile.ABI)
+            if (abi != null) {
+                output.versionCodeOverride = variant.versionCode * 100 + (abiCode[abi] ?: 0)
+                output.outputFileName = "mytv-${variant.versionName}-${abi}.apk"
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = 17
+    }
+}
+
+static def VersionCode() {
+    try {
+        def p = "git describe --tags --always"
+        def process = p.execute()
+        process.waitFor()
+        def replace = [v: "", ".": " ", "-": " "]
+        def arr = (process.text.trim().replace(replace) + " 0").split(" ")
+        def versionCode = arr[0].toInteger() * 16777216 + arr[1].toInteger() * 65536 + arr[2].toInteger() * 256 + arr[3].toInteger()
+        return versionCode
+    } catch (ignored) {
+        return 1
+    }
+}
+
+static def VersionName() {
+    try {
+        def process = "git describe --tags --always".execute()
+        process.waitFor()
+        def versionName = process.text.trim() - "v"
+        if (versionName.isEmpty()) {
+            versionName = "1.0.0"
+        }
+        return versionName
+    } catch (ignored) {
+        return "1.0.0"
+    }
+}
+
+dependencies {
+    implementation(libs.media3.ui)
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.exoplayer.hls)
+    implementation(libs.gson)
+    implementation(libs.converter.gson)
+    implementation(libs.retrofit)
+    implementation(libs.glide)
+    implementation(libs.work.runtime.ktx)
+    implementation(libs.core.ktx)
+    implementation(libs.multidex)
+    implementation(libs.leanback)
+    implementation(libs.lifecycle.runtime.ktx)
+    implementation(libs.constraintlayout)
+    implementation(libs.coroutines.android)
+    // 测速网络请求
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+}

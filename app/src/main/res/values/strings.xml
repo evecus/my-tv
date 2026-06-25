@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">我的电视</string>
+    <string name="title_channel_reversal">换台反转</string>
+    <string name="title_channel_num">换台时显示频道号</string>
+    <string name="check_version">检查更新</string>
+    <string name="title_boot_startup">开机自启</string>
+    <string name="title_grid">频道列表采用网格样式</string>
+    <string name="title_time">显示时间</string>
+    <string name="clear">恢复默认</string>
+    <string name="exit">退出应用</string>
+    <string name="start_update">开始更新</string>
+    <string name="speedtest_start">测速并更新频道</string>
+    <string name="speedtest_running">正在测速，请稍候…</string>
+    <string name="title_auto_speedtest">启动后自动测速</string>
+</resources>
