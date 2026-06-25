@@ -115,13 +115,6 @@
                     android:textSize="14sp"
                     android:text="@string/player_engine_ijk" />
             </RadioGroup>
-            <Button
-                android:id="@+id/exit"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textSize="14sp"
-                android:text="@string/exit"
-                />
             <Switch
                 android:id="@+id/switch_channel_reversal"
                 android:text="@string/title_channel_reversal"
