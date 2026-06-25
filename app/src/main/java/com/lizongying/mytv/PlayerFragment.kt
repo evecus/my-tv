@@ -56,11 +56,11 @@ class PlayerFragment : Fragment() {
                             val layoutParams = playerView?.layoutParams
                             if (ratio < aspectRatio) {
                                 layoutParams?.height =
-                                    (playerView?.measuredWidth?.div(aspectRatio))?.toInt()
+                                    (playerView?.measuredWidth?.div(aspectRatio))?.toInt() ?: 0
                                 playerView?.layoutParams = layoutParams
                             } else if (ratio > aspectRatio) {
                                 layoutParams?.width =
-                                    (playerView?.measuredHeight?.times(aspectRatio))?.toInt()
+                                    (playerView?.measuredHeight?.times(aspectRatio))?.toInt() ?: 0
                                 playerView?.layoutParams = layoutParams
                             }
                         }
