@@ -9,6 +9,7 @@ import android.view.ViewTreeObserver
 import androidx.fragment.app.Fragment
 import xyz.doikki.videoplayer.exo.ExoMediaPlayerFactory
 import xyz.doikki.videoplayer.ijk.IjkPlayerFactory
+import xyz.doikki.videoplayer.player.BaseVideoView
 import xyz.doikki.videoplayer.player.VideoView
 import xyz.doikki.videoplayer.player.VideoViewConfig
 import xyz.doikki.videoplayer.player.VideoViewManager
@@ -50,15 +51,15 @@ class PlayerFragment : Fragment() {
             }
         })
 
-        vv.addOnVideoViewStateChangeListener(object : VideoView.OnVideoViewStateChangeListener {
+        vv.addOnStateChangeListener(object : BaseVideoView.OnStateChangeListener {
             override fun onPlayerStateChanged(playerState: Int) {}
 
             override fun onPlayStateChanged(playState: Int) {
                 when (playState) {
-                    VideoView.STATE_PLAYING -> {
+                    BaseVideoView.STATE_PLAYING -> {
                         tvViewModel?.setErrInfo("")
                     }
-                    VideoView.STATE_ERROR -> {
+                    BaseVideoView.STATE_ERROR -> {
                         Log.e(TAG, "playback error")
                         tvViewModel?.setErrInfo("播放错误")
                         tvViewModel?.changed("retry")
