@@ -129,6 +129,12 @@ class SettingFragment : DialogFragment() {
         binding.btnSpeedtest.textSize = textSize
         binding.switchAutoSpeedtest.textSize = textSize
 
+        binding.checkVersion.setOnClickListener {
+            val context = requireContext()
+            val versionCode = context.appVersionCode
+            UpdateManager(requireActivity(), versionCode).checkAndUpdate()
+        }
+
         binding.exit.setOnClickListener {
             requireActivity().finishAffinity()
         }
