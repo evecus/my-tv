@@ -15,6 +15,7 @@ pub const LOGO_BASE_URL: &str =
 pub const DEFAULT_SUB_URL: &str =
     "http://gh-proxy.com/raw.githubusercontent.com/suxuang/myIPTV/main/ipv4.m3u";
 
+pub const CHANNEL_LIST_FILE: &str = "channel_list.txt";
 pub const HSMD_ADDRESS_LIST_FILE: &str = "hsmd_address_list.txt";
 
 // IPTV 类型路径
