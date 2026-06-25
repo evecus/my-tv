@@ -43,8 +43,8 @@ class TVViewModel(private var tv: TV) : ViewModel() {
     private val _ready = MutableLiveData<Boolean>()
     val ready: LiveData<Boolean> get() = _ready
 
-    // 源切换通知：发出后 InfoFragment 显示"源 x/n"并 3s 后消失
-    private val _sourceChanged = MutableLiveData<Pair<Int, Int>>()  // (当前1-based, 总数)
+    // 源切换通知：first=当前源编号(1-based)，边界提示时 first=0(已是第一个源) 或 -1(已是最后一个源); second=总源数(快照)
+    private val _sourceChanged = MutableLiveData<Pair<Int, Int>>()
     val sourceChanged: LiveData<Pair<Int, Int>> get() = _sourceChanged
 
     var seq = 0
@@ -59,13 +59,36 @@ class TVViewModel(private var tv: TV) : ViewModel() {
      * 切换源：delta = +1 下一个，-1 上一个，循环。
      * 切换后触发播放并通知 InfoFragment 显示"源 x/n"。
      */
+    /**
+     * 切换源：delta = +1 下一个，-1 上一个。
+     * 到达边界时不切换，通过 sourceChanged 发出边界信号：
+     *   first = 0  → 已是第一个源（左键越界）
+     *   first = -1 → 已是最后一个源（右键越界）
+     * 正常切换时 first = 当前1-based编号，second = 总源数快照。
+     */
     fun switchSource(delta: Int) {
-        if (sourceCount <= 1) return
-        tv.sourceIndex = ((tv.sourceIndex + delta) % sourceCount + sourceCount) % sourceCount
-        _videoIndex.value = tv.sourceIndex
-        _videoUrl.value   = tv.videoUrl
-        _sourceChanged.value = Pair(tv.sourceIndex + 1, sourceCount)
-        changed("source")
+        val total = sourceCount   // 快照，避免 addVideoUrl 竞态导致 total 变化
+        if (total <= 1) return
+        val newIndex = tv.sourceIndex + delta
+        when {
+            newIndex < 0 -> {
+                // 已经是第一个源，不切换，发出边界提示
+                _sourceChanged.value = Pair(0, total)
+                return
+            }
+            newIndex >= total -> {
+                // 已经是最后一个源，不切换，发出边界提示
+                _sourceChanged.value = Pair(-1, total)
+                return
+            }
+            else -> {
+                tv.sourceIndex = newIndex
+                _videoIndex.value = tv.sourceIndex
+                _videoUrl.value   = tv.videoUrl
+                _sourceChanged.value = Pair(tv.sourceIndex + 1, total)
+                changed("source")
+            }
+        }
     }
 
     fun addVideoUrl(url: String) {
