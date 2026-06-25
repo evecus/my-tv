@@ -9,7 +9,6 @@ import android.view.ViewTreeObserver
 import androidx.fragment.app.Fragment
 import xyz.doikki.videoplayer.exo.ExoMediaPlayerFactory
 import xyz.doikki.videoplayer.ijk.IjkPlayerFactory
-import xyz.doikki.videoplayer.player.AbstractPlayer
 import xyz.doikki.videoplayer.player.VideoView
 import xyz.doikki.videoplayer.player.VideoViewConfig
 import xyz.doikki.videoplayer.player.VideoViewManager
@@ -20,7 +19,7 @@ import com.github.mytv.models.TVViewModel
 class PlayerFragment : Fragment() {
 
     private var _binding: PlayerBinding? = null
-    private var videoView: VideoView<AbstractPlayer>? = null
+    private var videoView: VideoView? = null
     private var tvViewModel: TVViewModel? = null
     private val aspectRatio = 16f / 9f
 
@@ -29,9 +28,7 @@ class PlayerFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         _binding = PlayerBinding.inflate(inflater, container, false)
-
         initVideoView()
-
         (activity as MainActivity).fragmentReady(TAG)
         return _binding!!.root
     }
@@ -39,8 +36,7 @@ class PlayerFragment : Fragment() {
     private fun initVideoView() {
         applyPlayerEngine()
 
-        @Suppress("UNCHECKED_CAST")
-        val vv = VideoView<AbstractPlayer>(requireContext())
+        val vv = VideoView(requireContext())
         vv.layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
@@ -54,7 +50,7 @@ class PlayerFragment : Fragment() {
             }
         })
 
-        vv.addOnStateChangeListener(object : VideoView.OnStateChangeListener {
+        vv.addOnVideoViewStateChangeListener(object : VideoView.OnVideoViewStateChangeListener {
             override fun onPlayerStateChanged(playerState: Int) {}
 
             override fun onPlayStateChanged(playState: Int) {
@@ -88,7 +84,7 @@ class PlayerFragment : Fragment() {
         )
     }
 
-    private fun adjustAspectRatio(vv: VideoView<AbstractPlayer>) {
+    private fun adjustAspectRatio(vv: VideoView) {
         val w = vv.measuredWidth
         val h = vv.measuredHeight
         if (h == 0) return
@@ -103,11 +99,11 @@ class PlayerFragment : Fragment() {
 
     fun play(tvViewModel: TVViewModel) {
         this.tvViewModel = tvViewModel
-        videoView?.run {
-            release()
-            applyPlayerEngine()  // 每次播放前应用最新内核配置
-            setUrl(tvViewModel.getVideoUrlCurrent())
-            start()
+        videoView?.let { vv ->
+            vv.release()
+            applyPlayerEngine()
+            vv.setUrl(tvViewModel.getVideoUrlCurrent())
+            vv.start()
         }
     }
 
