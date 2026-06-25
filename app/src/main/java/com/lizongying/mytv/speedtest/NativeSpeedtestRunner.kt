@@ -63,7 +63,6 @@ object NativeSpeedtestRunner {
 
         val cmd = mutableListOf(
             binPath,
-            "android",
             "--workers", workers.toString(),
             "--top",     top.toString(),
             "--output",  outputFile.absolutePath,
