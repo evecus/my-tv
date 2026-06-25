@@ -1,7 +1,9 @@
 package com.github.mytv.speedtest
 
 import android.content.Context
+import android.content.Intent
 import android.util.Log
+import com.github.mytv.SpeedtestForegroundService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
@@ -42,6 +44,13 @@ object SpeedtestManager {
     private fun doRun(context: Context, listener: ProgressListener?): Boolean {
         listener?.onProgress("正在启动测速引擎…")
 
+        // 启动前台 Service，防止 Android 12+ PhantomProcess 机制
+        // 把测速子进程当作"幽灵进程"随机杀掉。
+        context.startService(
+            Intent(context, SpeedtestForegroundService::class.java)
+                .setAction(SpeedtestForegroundService.ACTION_START)
+        )
+
         try {
             NativeSpeedtestRunner.run(
                 context     = context,
@@ -56,6 +65,12 @@ object SpeedtestManager {
             Log.e(TAG, "speedtest failed: ${e.message}")
             listener?.onError("测速失败：${e.message}")
             return false
+        } finally {
+            // 无论成功失败都要停止前台 Service，避免常驻通知。
+            context.startService(
+                Intent(context, SpeedtestForegroundService::class.java)
+                    .setAction(SpeedtestForegroundService.ACTION_STOP)
+            )
         }
 
         Log.i(TAG, "speedtest done, m3u8 ready")
