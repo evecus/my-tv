@@ -100,7 +100,21 @@ pub fn clean_channel_name(name: &str) -> String {
         return s.replace("CCTV", "").replace("cctv", "");
     }
 
+    // ── 名称别名映射（放在最后，所有清洗完成后统一替换）─────────────
+    s = normalize_alias(&s);
+
     s
+}
+
+/// 将已知的别名/错误叫法统一为标准频道名。
+/// 同名合并逻辑会把这些源归到同一个频道下。
+fn normalize_alias(name: &str) -> String {
+    match name {
+        "上海卫视"   => "东方卫视".to_string(),
+        "内蒙卫视"   => "内蒙古卫视".to_string(),
+        "福建卫视"   => "东南卫视".to_string(),
+        _            => name.to_string(),
+    }
 }
 
 // ── 标准名映射 ────────────────────────────────────────────────────
