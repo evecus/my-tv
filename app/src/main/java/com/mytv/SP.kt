@@ -52,11 +52,11 @@ object SP {
         set(value) = sp.edit().putBoolean(KEY_CHANNEL_REVERSAL, value).apply()
 
     var channelNum: Boolean
-        get() = sp.getBoolean(KEY_CHANNEL_NUM, true)
+        get() = sp.getBoolean(KEY_CHANNEL_NUM, false)
         set(value) = sp.edit().putBoolean(KEY_CHANNEL_NUM, value).apply()
 
     var time: Boolean
-        get() = sp.getBoolean(KEY_TIME, true)
+        get() = sp.getBoolean(KEY_TIME, false)
         set(value) {
             if (value != this.time) {
                 sp.edit().putBoolean(KEY_TIME, value).apply()
