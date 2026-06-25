@@ -8,7 +8,6 @@ import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import androidx.fragment.app.Fragment
 import xyz.doikki.videoplayer.exo.ExoMediaPlayerFactory
-import xyz.doikki.videoplayer.ijk.IjkPlayerFactory
 import xyz.doikki.videoplayer.player.BaseVideoView
 import xyz.doikki.videoplayer.player.VideoView
 import xyz.doikki.videoplayer.player.VideoViewConfig
@@ -74,7 +73,7 @@ class PlayerFragment : Fragment() {
 
     private fun applyPlayerEngine() {
         val factory = if (SP.playerEngine == SP.PLAYER_ENGINE_IJK) {
-            IjkPlayerFactory.create()
+            HardwareIjkPlayer.Factory.create()
         } else {
             ExoMediaPlayerFactory.create()
         }
