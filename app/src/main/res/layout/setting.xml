@@ -1,151 +1,130 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/setting"
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
     >
-    <ScrollView
-        android:id="@+id/container"
-        android:layout_width="wrap_content"
-        android:layout_height="match_parent"
-        android:fillViewport="true"
+    <LinearLayout
+        android:id="@+id/content"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingTop="20dp"
+        android:paddingBottom="20dp"
+        android:paddingLeft="10dp"
+        android:paddingRight="10dp"
+        android:background="@drawable/rounded_dark_left"
         >
+        <TextView
+            android:id="@+id/name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/app_name"
+            android:textSize="16sp" />
+        <TextView
+            android:id="@+id/version"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="https://github.com/evecus/my-tv"
+            android:textSize="14sp"
+            />
         <LinearLayout
-            android:id="@+id/content"
-            android:layout_width="300dp"
-            android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:paddingTop="20dp"
-            android:paddingBottom="20dp"
-            android:paddingLeft="10dp"
-            android:paddingRight="10dp"
-            android:background="@drawable/rounded_dark_left"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
             >
-            <TextView
-                android:id="@+id/name"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/app_name"
-                android:textSize="16sp" />
-            <TextView
-                android:id="@+id/version"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:text="当前版本: $versionName\n获取最新: https://github.com/lizongying/my-tv/releases/"
-                android:textSize="14sp"
-                />
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                >
-                <Button
-                    android:id="@+id/check_version"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textSize="14sp"
-                    android:text="@string/check_version"
-                    />
-                <ProgressBar
-                    android:visibility="gone"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    />
-                <TextView
-                    android:id="@+id/version_name"
-                    android:text=""
-                    android:textSize="14sp"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-<!--            <androidx.core.widget.ContentLoadingProgressBar-->
-<!--                android:id="@+id/progressBar"-->
-<!--                android:layout_width="match_parent"-->
-<!--                android:layout_height="wrap_content"-->
-<!--                android:indeterminate="false"-->
-<!--                android:max="100"-->
-<!--                android:progress="0"-->
-<!--                android:visibility="gone"-->
-<!--                android:progressDrawable="@android:drawable/progress_horizontal" />-->
             <Button
-                android:id="@+id/clear"
+                android:id="@+id/check_version"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textSize="14sp"
-                android:text="@string/clear"
+                android:text="@string/check_version"
                 />
-            <!-- ── 测速区域 ────────────────────────────── -->
-            <Button
-                android:id="@+id/btn_speedtest"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textSize="14sp"
-                android:text="@string/speedtest_start"
-                />
-            <TextView
-                android:id="@+id/tv_speedtest_status"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textSize="12sp"
-                android:text=""
+            <ProgressBar
                 android:visibility="gone"
-                />
-            <Switch
-                android:id="@+id/switch_auto_speedtest"
-                android:text="@string/title_auto_speedtest"
-                android:textSize="14sp"
-                android:layout_marginTop="5dp"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-            <Button
-                android:id="@+id/exit"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="14sp"
-                android:text="@string/exit"
                 />
-            <Switch
-                android:id="@+id/switch_channel_reversal"
-                android:text="@string/title_channel_reversal"
+            <TextView
+                android:id="@+id/version_name"
+                android:text=""
                 android:textSize="14sp"
-                android:layout_marginTop="5dp"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-            <Switch
-                android:id="@+id/switch_channel_num"
-                android:text="@string/title_channel_num"
-                android:textSize="14sp"
-                android:layout_marginTop="5dp"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-            <Switch
-                android:id="@+id/switch_time"
-                android:text="@string/title_time"
-                android:textSize="14sp"
-                android:layout_marginTop="5dp"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-            <Switch
-                android:id="@+id/switch_boot_startup"
-                android:text="@string/title_boot_startup"
-                android:textSize="14sp"
-                android:layout_marginTop="5dp"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-            <Switch
-                android:id="@+id/switch_grid"
-                android:text="@string/title_grid"
-                android:textSize="14sp"
-                android:layout_marginTop="5dp"
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content" />
         </LinearLayout>
-    </ScrollView>
-    <ImageView
-        android:id="@+id/appreciate"
-        android:layout_width="300dp"
-        android:layout_height="wrap_content"
-        android:src="@drawable/appreciate"
-        android:background="@drawable/rounded_white_right" />
-</LinearLayout>
+        <Button
+            android:id="@+id/clear"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:text="@string/clear"
+            />
+        <Button
+            android:id="@+id/btn_speedtest"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:text="@string/speedtest_start"
+            />
+        <TextView
+            android:id="@+id/tv_speedtest_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:text=""
+            android:visibility="gone"
+            />
+        <Switch
+            android:id="@+id/switch_auto_speedtest"
+            android:text="@string/title_auto_speedtest"
+            android:textSize="14sp"
+            android:layout_marginTop="5dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+        <Button
+            android:id="@+id/exit"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:text="@string/exit"
+            />
+        <Switch
+            android:id="@+id/switch_channel_reversal"
+            android:text="@string/title_channel_reversal"
+            android:textSize="14sp"
+            android:layout_marginTop="5dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+        <Switch
+            android:id="@+id/switch_channel_num"
+            android:text="@string/title_channel_num"
+            android:textSize="14sp"
+            android:layout_marginTop="5dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+        <Switch
+            android:id="@+id/switch_time"
+            android:text="@string/title_time"
+            android:textSize="14sp"
+            android:layout_marginTop="5dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+        <Switch
+            android:id="@+id/switch_boot_startup"
+            android:text="@string/title_boot_startup"
+            android:textSize="14sp"
+            android:layout_marginTop="5dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+        <Switch
+            android:id="@+id/switch_grid"
+            android:text="@string/title_grid"
+            android:textSize="14sp"
+            android:layout_marginTop="5dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+</ScrollView>
