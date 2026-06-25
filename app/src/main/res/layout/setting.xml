@@ -100,7 +100,7 @@
                 android:id="@+id/rg_player_engine"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
+                android:orientation="vertical"
                 android:layout_marginTop="4dp">
                 <RadioButton
                     android:id="@+id/rb_engine_exo"
@@ -113,7 +113,6 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textSize="14sp"
-                    android:layout_marginStart="12dp"
                     android:text="@string/player_engine_ijk" />
             </RadioGroup>
             <Button
