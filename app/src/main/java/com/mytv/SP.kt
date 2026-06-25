@@ -29,6 +29,11 @@ object SP {
     // 是否启动后自动测速
     const val KEY_AUTO_SPEEDTEST = "auto_speedtest"
 
+    // 播放器内核选择
+    const val KEY_PLAYER_ENGINE = "player_engine"
+    const val PLAYER_ENGINE_EXO = "exo"
+    const val PLAYER_ENGINE_IJK = "ijk"
+
     // 上次测速时间（时间戳毫秒，0 表示从未测过）
     private const val KEY_LAST_SPEEDTEST = "last_speedtest"
 
@@ -92,4 +97,13 @@ object SP {
     var lastSpeedtest: Long
         get() = sp.getLong(KEY_LAST_SPEEDTEST, 0L)
         set(value) = sp.edit().putLong(KEY_LAST_SPEEDTEST, value).apply()
+
+    var playerEngine: String
+        get() = sp.getString(KEY_PLAYER_ENGINE, PLAYER_ENGINE_EXO) ?: PLAYER_ENGINE_EXO
+        set(value) {
+            if (value != playerEngine) {
+                sp.edit().putString(KEY_PLAYER_ENGINE, value).apply()
+                listener?.onSharedPreferenceChanged(KEY_PLAYER_ENGINE)
+            }
+        }
 }

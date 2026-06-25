@@ -6,6 +6,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.RadioGroup
 import android.widget.Toast
 import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.lifecycleScope
@@ -95,6 +96,17 @@ class SettingFragment : DialogFragment() {
             }
         }
 
+        // ── 播放器内核选择 ──────────────────────────────────────
+        binding.rgPlayerEngine.run {
+            check(if (SP.playerEngine == SP.PLAYER_ENGINE_IJK) R.id.rb_engine_ijk else R.id.rb_engine_exo)
+            setOnCheckedChangeListener { _: RadioGroup, checkedId: Int ->
+                val engine = if (checkedId == R.id.rb_engine_ijk) SP.PLAYER_ENGINE_IJK else SP.PLAYER_ENGINE_EXO
+                SP.playerEngine = engine
+                Toast.makeText(context, "切换播放器后将在下次播放时生效", Toast.LENGTH_SHORT).show()
+                (activity as MainActivity).settingDelayHide()
+            }
+        }
+
         // ── 手动测速按钮 ────────────────────────────────────────
         binding.btnSpeedtest.setOnClickListener {
             startSpeedtest()
@@ -128,6 +140,8 @@ class SettingFragment : DialogFragment() {
         binding.exit.textSize = textSize
         binding.btnSpeedtest.textSize = textSize
         binding.switchAutoSpeedtest.textSize = textSize
+        binding.rbEngineExo.textSize = textSize
+        binding.rbEngineIjk.textSize = textSize
 
         binding.checkVersion.setOnClickListener {
             val context = requireContext()

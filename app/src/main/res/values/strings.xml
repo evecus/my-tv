@@ -12,4 +12,7 @@
     <string name="speedtest_start">测速并更新频道</string>
     <string name="speedtest_running">正在测速，请稍候…</string>
     <string name="title_auto_speedtest">启动后自动测速</string>
+    <string name="title_player_engine">播放器</string>
+    <string name="player_engine_exo">ExoPlayer（默认）</string>
+    <string name="player_engine_ijk">IJKPlayer</string>
 </resources>

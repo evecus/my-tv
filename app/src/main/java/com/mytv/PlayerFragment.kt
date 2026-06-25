@@ -6,15 +6,13 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
-import androidx.annotation.OptIn
 import androidx.fragment.app.Fragment
-import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
-import androidx.media3.common.VideoSize
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
+import com.dueeeke.videoplayer.exo.ExoMediaPlayerFactory
+import com.dueeeke.videoplayer.ijk.IjkPlayerFactory
+import com.dueeeke.videoplayer.player.AbstractPlayer
+import com.dueeeke.videoplayer.player.VideoView
+import com.dueeeke.videoplayer.player.VideoViewConfig
+import com.dueeeke.videoplayer.player.VideoViewManager
 import com.github.mytv.databinding.PlayerBinding
 import com.github.mytv.models.TVViewModel
 
@@ -22,7 +20,7 @@ import com.github.mytv.models.TVViewModel
 class PlayerFragment : Fragment() {
 
     private var _binding: PlayerBinding? = null
-    private var playerView: PlayerView? = null
+    private var videoView: VideoView<AbstractPlayer>? = null
     private var tvViewModel: TVViewModel? = null
     private val aspectRatio = 16f / 9f
 
@@ -32,78 +30,105 @@ class PlayerFragment : Fragment() {
     ): View {
         _binding = PlayerBinding.inflate(inflater, container, false)
 
-        playerView = _binding!!.playerView
+        // 初始化 DKPlayer，根据 SP 配置选择内核
+        val factory = if (SP.playerEngine == SP.PLAYER_ENGINE_IJK) {
+            IjkPlayerFactory.create()
+        } else {
+            ExoMediaPlayerFactory.create()
+        }
+        VideoViewManager.setConfig(
+            VideoViewConfig.newBuilder()
+                .setPlayerFactory(factory)
+                .build()
+        )
 
-        playerView?.viewTreeObserver?.addOnGlobalLayoutListener(object :
-            ViewTreeObserver.OnGlobalLayoutListener {
-            @OptIn(UnstableApi::class)
-            override fun onGlobalLayout() {
-                playerView!!.viewTreeObserver.removeOnGlobalLayoutListener(this)
+        @Suppress("UNCHECKED_CAST")
+        videoView = VideoView<AbstractPlayer>(requireContext()).also { vv ->
+            vv.layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
 
-//                val renderersFactory = context?.let { DefaultRenderersFactory(it) }
-//                renderersFactory?.setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
-
-                playerView!!.player = activity?.let {
-                    ExoPlayer.Builder(it)
-//                        .setRenderersFactory(renderersFactory!!)
-                        .build()
+            vv.viewTreeObserver.addOnGlobalLayoutListener(object :
+                ViewTreeObserver.OnGlobalLayoutListener {
+                override fun onGlobalLayout() {
+                    vv.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                    adjustAspectRatio(vv)
                 }
-                playerView!!.player?.playWhenReady = true
-                playerView!!.player?.addListener(object : Player.Listener {
-                    override fun onVideoSizeChanged(videoSize: VideoSize) {
-                        val ratio = playerView?.measuredWidth?.div(playerView?.measuredHeight!!)
-                        if (ratio != null) {
-                            val layoutParams = playerView?.layoutParams
-                            if (ratio < aspectRatio) {
-                                layoutParams?.height =
-                                    (playerView?.measuredWidth?.div(aspectRatio))?.toInt() ?: 0
-                                playerView?.layoutParams = layoutParams
-                            } else if (ratio > aspectRatio) {
-                                layoutParams?.width =
-                                    (playerView?.measuredHeight?.times(aspectRatio))?.toInt() ?: 0
-                                playerView?.layoutParams = layoutParams
-                            }
-                        }
-                    }
+            })
 
-                    override fun onPlayerError(error: PlaybackException) {
-                        super.onPlayerError(error)
-                        Log.e(TAG, "PlaybackException $error")
-                        val err = "播放错误"
-                        tvViewModel?.setErrInfo(err)
-                        tvViewModel?.changed("retry")
-                    }
+            vv.addOnStateChangeListener(object : VideoView.OnStateChangeListener {
+                override fun onPlayerStateChanged(playerState: Int) {}
 
-                    override fun onIsPlayingChanged(isPlaying: Boolean) {
-                        super.onIsPlayingChanged(isPlaying)
-                        if (isPlaying) {
+                override fun onPlayStateChanged(playState: Int) {
+                    when (playState) {
+                        VideoView.STATE_PLAYING -> {
                             tvViewModel?.setErrInfo("")
                         }
+                        VideoView.STATE_ERROR -> {
+                            Log.e(TAG, "PlaybackException: player error")
+                            tvViewModel?.setErrInfo("播放错误")
+                            tvViewModel?.changed("retry")
+                        }
                     }
-                })
-            }
-        })
+                }
+            })
+
+            _binding!!.playerContainer.addView(vv)
+        }
+
         (activity as MainActivity).fragmentReady(TAG)
         return _binding!!.root
     }
 
-    @OptIn(UnstableApi::class)
+    private fun adjustAspectRatio(vv: VideoView<AbstractPlayer>) {
+        val w = vv.measuredWidth
+        val h = vv.measuredHeight
+        if (h == 0) return
+        val ratio = w.toFloat() / h.toFloat()
+        val lp = vv.layoutParams
+        when {
+            ratio < aspectRatio -> lp.height = (w / aspectRatio).toInt()
+            ratio > aspectRatio -> lp.width = (h * aspectRatio).toInt()
+        }
+        vv.layoutParams = lp
+    }
+
     fun play(tvViewModel: TVViewModel) {
         this.tvViewModel = tvViewModel
-        playerView?.player?.run {
-            setMediaItem(MediaItem.fromUri(tvViewModel.getVideoUrlCurrent()))
-            prepare()
-            volume = tvViewModel.getTV().volume
+        videoView?.run {
+            release()
+            // 切换内核时重建（切换内核需要重建 VideoView）
+            rebuildIfEngineChanged()
+            setUrl(tvViewModel.getVideoUrlCurrent())
+            start()
         }
+    }
+
+    /**
+     * 如果用户在设置里切换了播放器内核，重新初始化 VideoViewManager。
+     * VideoView 本身不需要重建，只要在下次 play() 前更新全局配置即可。
+     */
+    private fun rebuildIfEngineChanged() {
+        val factory = if (SP.playerEngine == SP.PLAYER_ENGINE_IJK) {
+            IjkPlayerFactory.create()
+        } else {
+            ExoMediaPlayerFactory.create()
+        }
+        VideoViewManager.setConfig(
+            VideoViewConfig.newBuilder()
+                .setPlayerFactory(factory)
+                .build()
+        )
     }
 
     override fun onStart() {
         Log.i(TAG, "onStart")
         super.onStart()
-        if (playerView != null && playerView!!.player?.isPlaying == false) {
-            Log.i(TAG, "replay")
-            playerView!!.player?.prepare()
-            playerView!!.player?.play()
+        videoView?.let {
+            if (!it.isPlaying) {
+                it.resume()
+            }
         }
     }
 
@@ -114,16 +139,12 @@ class PlayerFragment : Fragment() {
 
     override fun onPause() {
         super.onPause()
-        if (playerView != null && playerView!!.player?.isPlaying == true) {
-            playerView!!.player?.stop()
-        }
+        videoView?.pause()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        if (playerView != null) {
-            playerView!!.player?.release()
-        }
+        videoView?.release()
     }
 
     override fun onDestroyView() {

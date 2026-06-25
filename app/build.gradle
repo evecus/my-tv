@@ -104,4 +104,10 @@ dependencies {
     implementation(libs.coroutines.android)
     // 测速网络请求
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // DKPlayer 播放器框架
+    implementation(libs.dkplayer.java)
+    implementation(libs.player.exo)
+    implementation(libs.player.ijk)
+    implementation(libs.player.ijk.arm64)
+    implementation(libs.player.ijk.armv7a)
 }
