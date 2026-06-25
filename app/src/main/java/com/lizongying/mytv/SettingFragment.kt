@@ -110,7 +110,10 @@ class SettingFragment : DialogFragment() {
         val textSize = application.px2PxFont(binding.switchChannelReversal.textSize)
 
         // 尺寸缩放（保持原来的逻辑）
-        binding.content.layoutParams.width = application.px2Px(binding.content.layoutParams.width)
+        // match_parent(-1) 和 wrap_content(-2) 不做换算，只换算具体 dp 值
+        if (binding.content.layoutParams.width > 0) {
+            binding.content.layoutParams.width = application.px2Px(binding.content.layoutParams.width)
+        }
         binding.content.setPadding(
             application.px2Px(binding.content.paddingLeft),
             application.px2Px(binding.content.paddingTop),
