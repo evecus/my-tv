@@ -1,4 +1,4 @@
-name: build speedtest so
+name: build speedtest
 
 on:
   workflow_dispatch:
