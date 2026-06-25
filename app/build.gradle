@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace 'com.lizongying.mytv'
+    namespace 'com.github.mytv'
     compileSdk 35
 
     viewBinding {
@@ -12,7 +12,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.lizongying.mytv"
+        applicationId "com.github.mytv"
         minSdk 21
         targetSdk 35
         versionCode VersionCode()
