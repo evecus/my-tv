@@ -1,4 +1,4 @@
-name: build
+name: build apk
 
 on:
   workflow_dispatch:
@@ -32,6 +32,12 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-${{ hashFiles('**/*.gradle*', '**/libs.versions.toml') }}
           restore-keys: gradle-
+
+      - name: Tag commit with input version
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag ${{ github.event.inputs.tag }}
 
       - name: Build release APKs
         run: |
