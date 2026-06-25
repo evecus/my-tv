@@ -137,7 +137,6 @@ class SettingFragment : DialogFragment() {
         binding.checkVersion.textSize = textSize
         binding.versionName.textSize = textSize
         binding.clear.textSize = textSize
-        binding.exit.textSize = textSize
         binding.btnSpeedtest.textSize = textSize
         binding.switchAutoSpeedtest.textSize = textSize
         binding.rbEngineExo.textSize = textSize
@@ -147,10 +146,6 @@ class SettingFragment : DialogFragment() {
             val context = requireContext()
             val versionCode = context.appVersionCode
             UpdateManager(requireActivity(), versionCode).checkAndUpdate()
-        }
-
-        binding.exit.setOnClickListener {
-            requireActivity().finishAffinity()
         }
 
         return binding.root
