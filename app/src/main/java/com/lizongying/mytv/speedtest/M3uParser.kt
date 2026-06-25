@@ -74,10 +74,35 @@ object M3uParser {
             list.sortWith(compareByDescending<IptvEntry> { it.speed }.thenBy { it.sourceIndex })
         }
 
-        // 频道名排序
+        // 频道名排序（央视 → 卫视 → 其他，卫视按常见顺序）
+        val weishiOrder = listOf(
+            "湖南卫视", "东方卫视", "浙江卫视", "江苏卫视", "北京卫视",
+            "山东卫视", "河南卫视", "广东卫视", "安徽卫视", "深圳卫视",
+            "天津卫视", "江西卫视", "四川卫视", "湖北卫视", "重庆卫视",
+            "黑龙江卫视", "辽宁卫视", "河北卫视", "吉林卫视", "山西卫视",
+            "广西卫视", "云南卫视", "东南卫视", "贵州卫视", "陕西卫视",
+            "甘肃卫视", "内蒙古卫视", "新疆卫视", "宁夏卫视", "青海卫视",
+            "西藏卫视", "海南卫视", "兵团卫视",
+        )
+        val reCctvNum = Regex("""CCTV(\d+)""")
+        fun sortKey(name: String): Triple<Int, Double, String> {
+            val upper = name.uppercase()
+            if (upper.contains("CCTV")) {
+                if (upper.contains("5+")) return Triple(0, 5.5, "")
+                val m = reCctvNum.find(upper)
+                if (m != null) return Triple(0, m.groupValues[1].toDoubleOrNull() ?: 999.0, "")
+                return Triple(0, 999.0, "")
+            }
+            if (name.contains("卫视")) {
+                val idx = weishiOrder.indexOfFirst { name.contains(it) }
+                return if (idx >= 0) Triple(1, idx.toDouble(), name)
+                else Triple(1, weishiOrder.size.toDouble(), name)
+            }
+            return Triple(2, 0.0, name)
+        }
         val allNames = byName.keys.sortedWith(Comparator { a, b ->
-            val (a0, a1, a2) = ChannelHelper.sortKey(a)
-            val (b0, b1, b2) = ChannelHelper.sortKey(b)
+            val (a0, a1, a2) = sortKey(a)
+            val (b0, b1, b2) = sortKey(b)
             val c0 = a0.compareTo(b0)
             if (c0 != 0) return@Comparator c0
             val c1 = a1.compareTo(b1)
