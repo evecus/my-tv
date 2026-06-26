@@ -8,37 +8,41 @@ import xyz.doikki.videoplayer.player.PlayerFactory
 class HardwareIjkPlayer(context: Context) : IjkPlayer(context) {
 
     override fun setOptions() {
-        // ── 硬解 ────────────────────────────────────────────────
+        // ── 音频输出：关闭 OpenSL ES，走系统 AudioTrack ─────────
+        // OpenSL ES 请求 DEEP_BUFFER flag，该设备 HAL 只支持 PRIMARY
+        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "opensles", 0)
+
+        // ── 音频重采样：解决采样率/声道不匹配导致的静音 ──────────
+        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "soundtouch", 1)
+
+        // ── 硬解 ─────────────────────────────────────────────────
         mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec", 1)
         mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-auto-rotate", 1)
         mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-handle-resolution-change", 1)
+        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-hevc", 1)
 
-        // ── 音频输出：关闭 OpenSL ES，走系统 AudioTrack ────────
-        // OpenSL ES 会请求 DEEP_BUFFER flag，该设备 HAL 只支持 PRIMARY，
-        // flag 不匹配导致 createTrack 失败从而静音
-        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "opensles", 0)
+        // ── 视频渲染格式（YV12） ──────────────────────────────────
+        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "overlay-format", 842225234L)
 
-        // ── 音频格式兼容：强制软解音频，覆盖所有常见格式 ───────
-        // 部分 IPTV 流使用 AC3/EAC3(杜比)/DTS 音频，IJK 默认不启用这些解码器
-        // 开启后由 FFmpeg 软解，确保有声
-        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "framedrop", 1)
-        // 允许解码任何音频格式，不校验 profile/level
+        // ── 准备好立即开始播放 ────────────────────────────────────
+        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "start-on-prepared", 1)
+
+        // ── 不丢帧（framedrop=0 优先保证音频连续性） ─────────────
+        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "framedrop", 0)
+
+        // ── 网络断线重连 ──────────────────────────────────────────
+        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "reconnect", 1)
+
+        // ── 跳过解码 loop filter（降低 CPU 占用，不影响音频） ─────
         mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_CODEC, "skip_loop_filter", 48)
-        // 强制音频解码器不跳帧
-        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "skip-calc-frame-num", 0)
 
-        // 开启 AC3 / EAC3 软解（国内 IPTV 部分频道使用杜比音频）
-        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "ac3", 1)
-        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "eac3", 1)
-
-        // 音频重采样：统一输出为 48000Hz 立体声，避免采样率/声道不匹配导致静音
-        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "soundtouch", 1)
-
-        // ── 直播低延迟 ─────────────────────────────────────────
-        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "packet-buffering", 0)
-        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "max-buffer-size", 0)
-        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "fflags", "nobuffer")
-        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "analyzeduration", 100L)
+        // ── 直播低延迟 ────────────────────────────────────────────
+        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "max_cached_duration", 300)
+        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "flush_packets", 1)
+        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "min-frames", 1)
+        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_CODEC, "threads", "1")
+        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "dns_cache_timeout", -1)
+        mMediaPlayer.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "safe", 0)
     }
 
     class Factory : PlayerFactory<HardwareIjkPlayer>() {
