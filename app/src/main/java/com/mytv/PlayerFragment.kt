@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import androidx.fragment.app.Fragment
 import com.google.android.exoplayer2.DefaultRenderersFactory
+import com.google.android.exoplayer2.trackselection.DefaultTrackSelector
 import xyz.doikki.videoplayer.exo.ExoMediaPlayer
 import xyz.doikki.videoplayer.exo.ExoMediaPlayerFactory
 import xyz.doikki.videoplayer.player.BaseVideoView
@@ -75,15 +76,32 @@ class PlayerFragment : Fragment() {
         val factory = if (SP.playerEngine == SP.PLAYER_ENGINE_IJK) {
             HardwareIjkPlayer.Factory.create()
         } else {
-            // 自定义 ExoPlayer Factory：注入 RenderersFactory，启用 decoder fallback，
-            // 避免部分设备 audio HAL flag 不匹配（DEEP_BUFFER vs PRIMARY）导致的静音问题
             object : ExoMediaPlayerFactory() {
                 override fun createPlayer(context: android.content.Context): ExoMediaPlayer {
                     return ExoMediaPlayer(context).also { player ->
+                        // 启用解码器 fallback，避免格式不支持时直接放弃
                         val renderersFactory = DefaultRenderersFactory(context).apply {
                             setEnableDecoderFallback(true)
                         }
                         player.setRenderersFactory(renderersFactory)
+
+                        // 强制 TrackSelector 不过滤音频轨道：
+                        // 部分频道音频采样率/声道与设备能力有偏差，默认会被排除导致静音
+                        val trackSelector = DefaultTrackSelector(context).apply {
+                            setParameters(
+                                buildUponParameters()
+                                    // 允许混合声道数的音频自适应（如 mono/stereo 混合流）
+                                    .setAllowAudioMixedChannelCountAdaptiveness(true)
+                                    // 允许混合采样率的音频自适应
+                                    .setAllowAudioMixedSampleRateAdaptiveness(true)
+                                    // 不限制音频比特率
+                                    .setMaxAudioBitrate(Int.MAX_VALUE)
+                                    // 禁用音频格式的设备能力检查，强制尝试播放所有音轨
+                                    .setExceedAudioConstraintsIfNecessary(true)
+                                    .build()
+                            )
+                        }
+                        player.setTrackSelector(trackSelector)
                     }
                 }
             }
