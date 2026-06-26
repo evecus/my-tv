@@ -7,6 +7,9 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import androidx.fragment.app.Fragment
+import com.google.android.exoplayer2.DefaultRenderersFactory
+import xyz.doikki.videoplayer.exo.ExoMediaPlayer
+import xyz.doikki.videoplayer.exo.ExoMediaPlayerFactory
 import xyz.doikki.videoplayer.player.BaseVideoView
 import xyz.doikki.videoplayer.player.VideoView
 import xyz.doikki.videoplayer.player.VideoViewConfig
@@ -54,9 +57,7 @@ class PlayerFragment : Fragment() {
 
             override fun onPlayStateChanged(playState: Int) {
                 when (playState) {
-                    BaseVideoView.STATE_PLAYING -> {
-                        tvViewModel?.setErrInfo("")
-                    }
+                    BaseVideoView.STATE_PLAYING -> tvViewModel?.setErrInfo("")
                     BaseVideoView.STATE_ERROR -> {
                         Log.e(TAG, "playback error")
                         tvViewModel?.setErrInfo("播放错误")
@@ -74,9 +75,18 @@ class PlayerFragment : Fragment() {
         val factory = if (SP.playerEngine == SP.PLAYER_ENGINE_IJK) {
             HardwareIjkPlayer.Factory.create()
         } else {
-            // 修复：关闭 tunneling，防止触发设备不支持的 HW_AV_SYNC (flag 0x8)
-            // 日志显示 AudioFlinger 持续报 mismatch(requested=0x8, output=0x2)
-            NoTunnelingExoPlayer.Factory.create()
+            // 自定义 ExoPlayer Factory：注入 RenderersFactory，启用 decoder fallback，
+            // 避免部分设备 audio HAL flag 不匹配（DEEP_BUFFER vs PRIMARY）导致的静音问题
+            object : ExoMediaPlayerFactory() {
+                override fun createPlayer(context: android.content.Context): ExoMediaPlayer {
+                    return ExoMediaPlayer(context).also { player ->
+                        val renderersFactory = DefaultRenderersFactory(context).apply {
+                            setEnableDecoderFallback(true)
+                        }
+                        player.setRenderersFactory(renderersFactory)
+                    }
+                }
+            }
         }
         VideoViewManager.setConfig(
             VideoViewConfig.newBuilder()

@@ -21,7 +21,6 @@ android {
         multiDexEnabled true
     }
 
-    // 每个 ABI 单独输出一个 APK
     splits {
         abi {
             enable true
@@ -88,9 +87,9 @@ static def VersionName() {
 }
 
 dependencies {
-    implementation(libs.media3.ui)
-    implementation(libs.media3.exoplayer)
-    implementation(libs.media3.exoplayer.hls)
+    // Media3 已移除：DKPlayer 的 player-exo 内部依赖 com.google.android.exoplayer2，
+    // 与 androidx.media3 是两套不同包，同时存在会产生类冲突。
+    // ExoPlayer 能力完全由 DKPlayer 的 player-exo 提供。
     implementation(libs.gson)
     implementation(libs.converter.gson)
     implementation(libs.retrofit)
@@ -104,8 +103,8 @@ dependencies {
     implementation(libs.coroutines.android)
     // 测速网络请求
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    // DKPlayer 播放器框架（Maven Central，无需 JitPack）
+    // DKPlayer 播放器框架（Maven Central）
     implementation(libs.dkplayer.java)
-    implementation(libs.player.exo)
-    implementation(libs.player.ijk)  // 3.1.3+ IJK so 已内置，无需单独引 arm64/armv7a
+    implementation(libs.player.exo)   // 内含 com.google.android.exoplayer2
+    implementation(libs.player.ijk)   // 内含 IJK so
 }
