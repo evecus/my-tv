@@ -7,7 +7,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import androidx.fragment.app.Fragment
-import xyz.doikki.videoplayer.exo.ExoMediaPlayerFactory
 import xyz.doikki.videoplayer.player.BaseVideoView
 import xyz.doikki.videoplayer.player.VideoView
 import xyz.doikki.videoplayer.player.VideoViewConfig
@@ -75,7 +74,9 @@ class PlayerFragment : Fragment() {
         val factory = if (SP.playerEngine == SP.PLAYER_ENGINE_IJK) {
             HardwareIjkPlayer.Factory.create()
         } else {
-            ExoMediaPlayerFactory.create()
+            // 修复：关闭 tunneling，防止触发设备不支持的 HW_AV_SYNC (flag 0x8)
+            // 日志显示 AudioFlinger 持续报 mismatch(requested=0x8, output=0x2)
+            NoTunnelingExoPlayer.Factory.create()
         }
         VideoViewManager.setConfig(
             VideoViewConfig.newBuilder()
