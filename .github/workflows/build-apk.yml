@@ -89,7 +89,6 @@ jobs:
           echo "arm64=$ARM64"   >> $GITHUB_OUTPUT
           echo "arm32=$ARM32"   >> $GITHUB_OUTPUT
           echo "arm64: $ARM64 | arm32: $ARM32"
-          rm $OUTDIR/*igned.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -97,6 +96,6 @@ jobs:
           tag_name: ${{ github.event.inputs.tag }}
           name: my-tv ${{ github.event.inputs.tag }}
           prerelease: false
-          files: app/build/outputs/apk/release/*.apk
+          files: app/build/outputs/apk/release/*signed.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
