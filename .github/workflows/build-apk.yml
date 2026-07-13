@@ -89,6 +89,7 @@ jobs:
           echo "arm64=$ARM64"   >> $GITHUB_OUTPUT
           echo "arm32=$ARM32"   >> $GITHUB_OUTPUT
           echo "arm64: $ARM64 | arm32: $ARM32"
+          rm $OUTDIR/*igned.apk
 
       - name: Get History
         id: get_history
@@ -101,7 +102,7 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.tag }}
           name: my-tv ${{ github.event.inputs.tag }}
-          prerelease: true
+          prerelease: false
           files: app/build/outputs/apk/release/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
