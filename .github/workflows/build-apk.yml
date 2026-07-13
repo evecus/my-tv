@@ -96,33 +96,12 @@ jobs:
           chmod +x history.sh
           ./history.sh > history.md
 
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag }}
-          release_name: my-tv ${{ github.event.inputs.tag }}
-          draft: false
-          prerelease: false
-
-      - name: Upload arm64-v8a APK
-        uses: actions/upload-release-asset@v1
+          name: my-tv ${{ github.event.inputs.tag }}
+          prerelease: true
+          files: app/build/outputs/apk/release/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ steps.locate.outputs.arm64 }}
-          asset_name: my-tv-mobile-arm64-v8a.apk
-          asset_content_type: application/vnd.android.package-archive
-
-      - name: Upload armeabi-v7a APK
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ steps.locate.outputs.arm32 }}
-          asset_name: my-tv-mobile-armeabi-v7a.apk
-          asset_content_type: application/vnd.android.package-archive
