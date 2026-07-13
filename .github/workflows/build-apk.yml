@@ -1,0 +1,162 @@
+name: build apk
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.0.4)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('**/*.gradle*', '**/libs.versions.toml') }}
+          restore-keys: gradle-
+
+      - name: Tag commit with input version
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag ${{ github.event.inputs.tag }}
+
+      - name: Build release APKs
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease -PIS_SO_BUILD=false
+
+      # ── 解码 keystore ─────────────────────────────────────────────
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.KEYSTORE }}" | base64 -d > /tmp/release.jks
+
+      # ── 并行签名全部 APK（V2/V3，跳过 V1）────────────────────────
+      - name: Sign all APKs
+        run: |
+          BUILD_TOOLS=$ANDROID_HOME/build-tools/34.0.0
+          OUTDIR=app/build/outputs/apk/release
+          KEYSTORE=/tmp/release.jks
+
+          sign_apk() {
+            local INPUT="$1"
+            local OUTPUT="${INPUT%.apk}-signed.apk"
+            "$BUILD_TOOLS/zipalign" -f -p 4 "$INPUT" "${INPUT%.apk}-aligned.apk"
+            "$BUILD_TOOLS/apksigner" sign \
+              --ks "$KEYSTORE" \
+              --ks-key-alias "${{ secrets.ALIAS }}" \
+              --ks-pass pass:"${{ secrets.KEYSTORE_PASSWORD }}" \
+              --key-pass pass:"${{ secrets.ALIAS_PASSWORD }}" \
+              --v1-signing-enabled false \
+              --v2-signing-enabled true \
+              --v3-signing-enabled true \
+              --out "$OUTPUT" \
+              "${INPUT%.apk}-aligned.apk"
+            echo "Signed: $OUTPUT"
+          }
+
+          export -f sign_apk
+          export BUILD_TOOLS KEYSTORE
+          export ALIAS="${{ secrets.ALIAS }}"
+          export KEYSTORE_PASSWORD="${{ secrets.KEYSTORE_PASSWORD }}"
+          export ALIAS_PASSWORD="${{ secrets.ALIAS_PASSWORD }}"
+
+          # 并行签名 4 个 APK
+          parallel sign_apk ::: \
+            "$OUTDIR"/mytv-*-arm64-v8a.apk \
+            "$OUTDIR"/mytv-*-armeabi-v7a.apk \
+            "$OUTDIR"/mytv-*-x86_64.apk \
+            "$OUTDIR"/mytv-*-x86.apk
+
+      # ── 找到签名后的文件路径 ──────────────────────────────────────
+      - name: Locate signed APKs
+        id: locate
+        run: |
+          OUTDIR=app/build/outputs/apk/release
+          ARM64=$(ls $OUTDIR/*arm64-v8a*-signed.apk 2>/dev/null | head -1)
+          ARM32=$(ls $OUTDIR/*armeabi-v7a*-signed.apk 2>/dev/null | head -1)
+          X86_64=$(ls $OUTDIR/*x86_64*-signed.apk 2>/dev/null | head -1)
+          X86=$(ls $OUTDIR/*x86*-signed.apk 2>/dev/null | grep -v x86_64 | head -1)
+          echo "arm64=$ARM64"   >> $GITHUB_OUTPUT
+          echo "arm32=$ARM32"   >> $GITHUB_OUTPUT
+          echo "x86_64=$X86_64" >> $GITHUB_OUTPUT
+          echo "x86=$X86"       >> $GITHUB_OUTPUT
+          echo "arm64: $ARM64 | arm32: $ARM32 | x86_64: $X86_64 | x86: $X86"
+
+      - name: Get History
+        id: get_history
+        run: |
+          chmod +x history.sh
+          ./history.sh > history.md
+
+      # ── 创建 Release ──────────────────────────────────────────────
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          release_name: my-tv ${{ github.event.inputs.tag }}
+          draft: false
+          prerelease: false
+          body_path: history.md
+
+      # ── 上传全部 APK ──────────────────────────────────────────────
+      - name: Upload arm64-v8a APK
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.locate.outputs.arm64 }}
+          asset_name: my-tv-arm64-v8a.apk
+          asset_content_type: application/vnd.android.package-archive
+
+      - name: Upload armeabi-v7a APK
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.locate.outputs.arm32 }}
+          asset_name: my-tv-armeabi-v7a.apk
+          asset_content_type: application/vnd.android.package-archive
+
+      - name: Upload x86_64 APK
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.locate.outputs.x86_64 }}
+          asset_name: my-tv-x86_64.apk
+          asset_content_type: application/vnd.android.package-archive
+
+      - name: Upload x86 APK
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.locate.outputs.x86 }}
+          asset_name: my-tv-x86.apk
+          asset_content_type: application/vnd.android.package-archive
