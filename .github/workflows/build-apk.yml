@@ -91,12 +91,6 @@ jobs:
           echo "arm64: $ARM64 | arm32: $ARM32"
           rm $OUTDIR/*igned.apk
 
-      - name: Get History
-        id: get_history
-        run: |
-          chmod +x history.sh
-          ./history.sh > history.md
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
