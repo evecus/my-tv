@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFF</color>
+    <color name="primary">#5B6AF0</color>
+    <color name="primary_light">#EEF0FE</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="surface_variant">#F5F6FA</color>
+    <color name="on_surface">#1A1A2E</color>
+    <color name="on_surface_secondary">#6B7280</color>
+    <color name="divider">#E8E9F0</color>
+    <color name="player_bg">#000000</color>
+    <color name="selected_bg">#5B6AF0</color>
+    <color name="selected_text">#FFFFFF</color>
+    <color name="ic_launcher_background">#5B6AF0</color>
+    <!-- legacy aliases for speedtest dialog -->
+    <color name="focus">#5B6AF0</color>
+    <color name="blur">#E8E9F0</color>
+</resources>

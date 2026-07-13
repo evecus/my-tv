@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="300dp"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@drawable/rounded_dialog">
+
+    <TextView
+        android:id="@+id/tv_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="正在测速"
+        android:textColor="@color/on_surface"
+        android:textSize="17sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:paddingBottom="14dp"/>
+
+    <TextView
+        android:id="@+id/tv_phase"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="正在启动测速引擎…"
+        android:textColor="@color/on_surface_secondary"
+        android:textSize="13sp"
+        android:gravity="center"
+        android:paddingBottom="14dp"
+        android:singleLine="false"/>
+
+    <ProgressBar
+        android:id="@+id/progress_bar"
+        style="@android:style/Widget.ProgressBar.Horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="4dp"
+        android:max="100"
+        android:progress="0"
+        android:indeterminate="true"
+        android:progressTint="@color/primary"
+        android:progressBackgroundTint="@color/divider"/>
+
+    <TextView
+        android:id="@+id/tv_progress"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textColor="@color/on_surface_secondary"
+        android:textSize="12sp"
+        android:gravity="center"
+        android:visibility="gone"
+        android:paddingTop="4dp"/>
+</LinearLayout>

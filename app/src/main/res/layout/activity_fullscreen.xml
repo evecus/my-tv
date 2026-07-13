@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/fullscreen_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/black">
+
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/fullscreen_player_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:use_controller="false"
+        app:resize_mode="fit"
+        app:shutter_background_color="@android:color/transparent"/>
+
+    <!-- IJK 播放器渲染视图（默认隐藏，切到 ijk 内核时显示） -->
+    <SurfaceView
+        android:id="@+id/ijk_surface_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"/>
+
+    <!-- Loading -->
+    <ProgressBar
+        android:id="@+id/fullscreen_loading"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center"
+        android:indeterminate="true"
+        android:indeterminateTint="@color/white"
+        android:visibility="gone"/>
+
+    <!-- 全屏控制栏 -->
+    <LinearLayout
+        android:id="@+id/fullscreen_controls"
+        android:layout_width="match_parent"
+        android:layout_height="72dp"
+        android:layout_gravity="bottom"
+        android:background="@drawable/bg_player_controls"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="24dp"
+        android:visibility="gone">
+
+        <!-- 暂停/播放 -->
+        <ImageButton
+            android:id="@+id/btn_fs_play_pause"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_pause"
+            android:scaleType="fitCenter"/>
+
+        <!-- 重试 -->
+        <ImageButton
+            android:id="@+id/btn_fs_retry"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="12dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_refresh"
+            android:scaleType="fitCenter"/>
+
+        <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>
+
+        <!-- 退出全屏（缩小图标） -->
+        <ImageButton
+            android:id="@+id/btn_fs_exit"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_fullscreen_exit"
+            android:scaleType="fitCenter"/>
+    </LinearLayout>
+
+    <!-- 频道名（左上角短暂显示） -->
+    <TextView
+        android:id="@+id/tv_fs_channel_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_margin="20dp"
+        android:background="#88000000"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="6dp"
+        android:textColor="@color/white"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:visibility="gone"/>
+
+</FrameLayout>

@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root_layout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="@color/surface_variant">
+
+    <!-- ══ 左侧 55%：播放器(flex) + 信息栏(固定高) ══ -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="55"
+        android:orientation="vertical"
+        android:background="@color/surface_variant">
+
+        <!-- 播放器：撑满左侧除信息栏以外的全部高度 -->
+        <FrameLayout
+            android:id="@+id/player_container"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:background="@color/player_bg">
+
+            <androidx.media3.ui.PlayerView
+                android:id="@+id/player_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                app:use_controller="false"
+                app:resize_mode="fit"
+                app:shutter_background_color="@android:color/transparent"/>
+
+            <!-- Loading（默认隐藏） -->
+            <FrameLayout
+                android:id="@+id/loading_overlay"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/player_bg"
+                android:visibility="gone">
+                <ProgressBar
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_gravity="center"
+                    android:indeterminate="true"
+                    android:indeterminateTint="@color/white"/>
+            </FrameLayout>
+
+            <!-- Error -->
+            <LinearLayout
+                android:id="@+id/error_overlay"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/player_bg"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:visibility="gone">
+                <ImageView
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:src="@drawable/sad_cloud"/>
+                <TextView
+                    android:id="@+id/error_msg"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textColor="@color/white"
+                    android:textSize="14sp"/>
+            </LinearLayout>
+
+            <!-- 控制栏（透明背景，点击后浮出） -->
+            <LinearLayout
+                android:id="@+id/portrait_controls"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_gravity="bottom"
+                android:background="@drawable/bg_player_controls"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="20dp"
+                android:visibility="gone">
+
+                <ImageButton
+                    android:id="@+id/btn_play_pause"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_pause"
+                    android:scaleType="fitCenter"/>
+
+                <ImageButton
+                    android:id="@+id/btn_retry"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="10dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_refresh"
+                    android:scaleType="fitCenter"/>
+
+                <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>
+
+                <ImageButton
+                    android:id="@+id/btn_fullscreen"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_fullscreen"
+                    android:scaleType="fitCenter"/>
+            </LinearLayout>
+        </FrameLayout>
+
+        <!-- 信息栏：固定高度，刚好容纳图标 + 文字一行 -->
+        <LinearLayout
+            android:id="@+id/info_card"
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            android:layout_marginHorizontal="8dp"
+            android:layout_marginTop="5dp"
+            android:layout_marginBottom="6dp"
+            android:background="@drawable/bg_card_elevated"
+            android:elevation="2dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="14dp">
+
+            <!-- 频道名 + 线路切换 -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tv_channel_name"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="未播放"
+                    android:textColor="@color/on_surface"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:maxLines="1"
+                    android:ellipsize="end"/>
+
+                <!-- 线路切换 < x/n > -->
+                <LinearLayout
+                    android:id="@+id/source_row"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/btn_source_prev"
+                        android:layout_width="26dp"
+                        android:layout_height="26dp"
+                        android:gravity="center"
+                        android:text="&lt;"
+                        android:textColor="@color/primary"
+                        android:textSize="17sp"
+                        android:textStyle="bold"
+                        android:background="?attr/selectableItemBackgroundBorderless"/>
+
+                    <TextView
+                        android:id="@+id/tv_source_label"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginHorizontal="4dp"
+                        android:textColor="@color/on_surface_secondary"
+                        android:textSize="12sp"
+                        android:text="线路 1/1"/>
+
+                    <TextView
+                        android:id="@+id/btn_source_next"
+                        android:layout_width="26dp"
+                        android:layout_height="26dp"
+                        android:gravity="center"
+                        android:text="&gt;"
+                        android:textColor="@color/primary"
+                        android:textSize="17sp"
+                        android:textStyle="bold"
+                        android:background="?attr/selectableItemBackgroundBorderless"/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 设置按钮 -->
+            <ImageButton
+                android:id="@+id/btn_settings"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
+                android:background="@drawable/bg_icon_button"
+                android:padding="8dp"
+                android:src="@drawable/ic_settings"
+                android:scaleType="fitCenter"/>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- 左右分隔线 -->
+    <View
+        android:layout_width="1dp"
+        android:layout_height="match_parent"
+        android:background="@color/divider"/>
+
+    <!-- ══ 右侧 45%：频道分组 + 频道列表 ══ -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="45"
+        android:orientation="horizontal"
+        android:background="@color/surface">
+
+        <ListView
+            android:id="@+id/group_list"
+            android:layout_width="130dp"
+            android:layout_height="match_parent"
+            android:divider="@null"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:scrollbarStyle="insideOverlay"
+            android:scrollbars="none"/>
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="match_parent"
+            android:background="@color/divider"/>
+
+        <ListView
+            android:id="@+id/channel_list"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:divider="@null"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:scrollbarStyle="insideOverlay"
+            android:scrollbars="none"/>
+    </LinearLayout>
+
+</LinearLayout>
