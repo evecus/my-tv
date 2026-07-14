@@ -48,6 +48,11 @@ class FullscreenActivity : FragmentActivity() {
 
     private var currentUrl: String = ""
 
+    /** IJK 待播放 URL：surface 尚未创建时暂存，surfaceCreated 后触发播放 */
+    private var ijkPendingUrl: String? = null
+    /** IJK surface 是否已就绪 */
+    private var ijkSurfaceReady = false
+
     /** IJK 视频尺寸（用于保持画面比例） */
     private var ijkVideoWidth = 0
     private var ijkVideoHeight = 0
@@ -100,10 +105,17 @@ class FullscreenActivity : FragmentActivity() {
         // IJK SurfaceView 回调
         ijkSurfaceView.holder.addCallback(object : SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {
+                ijkSurfaceReady = true
                 ijkEngine?.setSurface(holder.surface)
+                // 如果 ensureEngine 已暂存了 URL，现在 surface 就绪，开始播放
+                ijkPendingUrl?.let { url ->
+                    ijkPendingUrl = null
+                    ijkEngine?.play(url)
+                }
             }
             override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
             override fun surfaceDestroyed(holder: SurfaceHolder) {
+                ijkSurfaceReady = false
                 ijkEngine?.setSurface(null)
             }
         })
@@ -167,7 +179,13 @@ class FullscreenActivity : FragmentActivity() {
                 buildIjk()
             }
             currentEngine = "ijk"
-            ijkEngine?.play(url)
+            if (ijkSurfaceReady) {
+                // surface 已就绪，立即播放
+                ijkEngine?.play(url)
+            } else {
+                // surface 尚未创建，暂存 URL，等 surfaceCreated 回调触发播放
+                ijkPendingUrl = url
+            }
         } else {
             releaseIjk()
             switchToExoView()
