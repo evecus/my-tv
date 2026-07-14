@@ -5,9 +5,11 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.Gravity
 import android.view.SurfaceHolder
 import android.view.View
 import android.view.WindowManager
+import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ProgressBar
@@ -45,6 +47,10 @@ class FullscreenActivity : FragmentActivity() {
     private var hasAutoSwitchedEngine = false
 
     private var currentUrl: String = ""
+
+    /** IJK 视频尺寸（用于保持画面比例） */
+    private var ijkVideoWidth = 0
+    private var ijkVideoHeight = 0
 
     private val handler = Handler(Looper.getMainLooper())
     private val hideControlsRunnable = Runnable { hideControls() }
@@ -215,7 +221,11 @@ class FullscreenActivity : FragmentActivity() {
                 handleEngineError("ijk", "error($what,$extra)")
             }
             override fun onCompletion() {}
-            override fun onVideoSizeChanged(width: Int, height: Int) {}
+            override fun onVideoSizeChanged(width: Int, height: Int) {
+                ijkVideoWidth = width
+                ijkVideoHeight = height
+                adjustIjkAspectRatio()
+            }
             override fun onInfo(what: Int, extra: Int) {}
             override fun onBufferingUpdate(percent: Int) {}
         })
@@ -244,6 +254,30 @@ class FullscreenActivity : FragmentActivity() {
     private fun switchToIjkView() {
         playerView.visibility = View.GONE
         ijkSurfaceView.visibility = View.VISIBLE
+        ijkSurfaceView.post { adjustIjkAspectRatio() }
+    }
+
+    /** 按 IJK 视频实际比例调整 SurfaceView 尺寸，保持 fit（不拉伸） */
+    private fun adjustIjkAspectRatio() {
+        if (ijkVideoWidth <= 0 || ijkVideoHeight <= 0) return
+        val container = ijkSurfaceView.parent as? FrameLayout ?: return
+        val cw = container.width
+        val ch = container.height
+        if (cw <= 0 || ch <= 0) return
+
+        val videoRatio = ijkVideoWidth.toFloat() / ijkVideoHeight
+        val containerRatio = cw.toFloat() / ch
+
+        val lp = ijkSurfaceView.layoutParams as FrameLayout.LayoutParams
+        if (videoRatio > containerRatio) {
+            lp.width = cw
+            lp.height = (cw / videoRatio).toInt()
+        } else {
+            lp.width = (ch * videoRatio).toInt()
+            lp.height = ch
+        }
+        lp.gravity = Gravity.CENTER
+        ijkSurfaceView.layoutParams = lp
     }
 
     private fun releaseExo() {
