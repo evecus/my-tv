@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/list_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent"
+    android:clickable="true"
+    android:focusable="false"
+    android:orientation="horizontal"
+    >
+
+    <!-- 左侧：分组列表 -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/list_group"
+        android:layout_width="220dp"
+        android:layout_height="match_parent"
+        android:background="@color/blur"
+        android:clipToPadding="false"
+        android:paddingTop="20dp"
+        android:paddingBottom="20dp"
+        />
+
+    <!-- 右侧：当前分组的频道列表 -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/list_channel"
+        android:layout_width="360dp"
+        android:layout_height="match_parent"
+        android:background="#DA1A1A1A"
+        android:clipToPadding="false"
+        android:paddingTop="20dp"
+        android:paddingBottom="20dp"
+        />
+
+</LinearLayout>

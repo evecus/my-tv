@@ -35,6 +35,7 @@ class MainActivity : FragmentActivity(), OnSharedPreferenceChangeListener {
 
     private val loadingFragment = LoadingFragment()
     private val mainFragment = MainFragment()
+    private val listMenuFragment = ListMenuFragment()
     private val infoFragment = InfoFragment()
     private val channelFragment = ChannelFragment()
     private var timeFragment = TimeFragment()
@@ -54,6 +55,12 @@ class MainActivity : FragmentActivity(), OnSharedPreferenceChangeListener {
             utilsJob.start()
         }
     }
+
+    /** 当前应使用的频道列表样式 Fragment：网格样式用 MainFragment，默认样式用两栏 ListMenuFragment */
+    private fun activeMenuFragment(): Fragment = if (SP.grid) mainFragment else listMenuFragment
+    private fun inactiveMenuFragment(): Fragment = if (SP.grid) listMenuFragment else mainFragment
+
+    private fun menuIsHidden(): Boolean = activeMenuFragment().isHidden
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,7 +100,9 @@ class MainActivity : FragmentActivity(), OnSharedPreferenceChangeListener {
                 .add(R.id.main_browse_fragment, infoFragment)
                 .add(R.id.main_browse_fragment, channelFragment)
                 .add(R.id.main_browse_fragment, mainFragment)
+                .add(R.id.main_browse_fragment, listMenuFragment)
                 .hide(mainFragment)
+                .hide(listMenuFragment)
                 .hide(errorFragment)
                 .hide(loadingFragment)
 
@@ -177,7 +186,7 @@ class MainActivity : FragmentActivity(), OnSharedPreferenceChangeListener {
     }
 
     private fun showChannel(channel: String) {
-        if (!mainFragment.isHidden) {
+        if (!menuIsHidden()) {
             return
         }
 
@@ -198,6 +207,11 @@ class MainActivity : FragmentActivity(), OnSharedPreferenceChangeListener {
         mainFragment.play(itemPosition)
     }
 
+    /** 供两栏列表（ListMenuFragment）按全局频道 id 播放，语义同 play(itemPosition) */
+    fun playById(id: Int) {
+        mainFragment.play(id)
+    }
+
     fun prev() {
         mainFragment.prev()
     }
@@ -208,13 +222,14 @@ class MainActivity : FragmentActivity(), OnSharedPreferenceChangeListener {
 
     fun switchMainFragment() {
         val transaction = supportFragmentManager.beginTransaction()
+        val target = activeMenuFragment()
 
-        if (mainFragment.isHidden) {
-            mainFragment.setPosition()
-            transaction.show(mainFragment)
+        if (target.isHidden) {
+            if (target is MainFragment) target.setPosition()
+            transaction.show(target)
             mainActive()
         } else {
-            transaction.hide(mainFragment)
+            transaction.hide(target)
         }
 
         transaction.commit()
@@ -235,19 +250,21 @@ class MainActivity : FragmentActivity(), OnSharedPreferenceChangeListener {
     }
 
     private val hideMain = Runnable {
-        if (!mainFragment.isHidden) {
-            supportFragmentManager.beginTransaction().hide(mainFragment).commit()
+        val target = activeMenuFragment()
+        if (!target.isHidden) {
+            supportFragmentManager.beginTransaction().hide(target).commit()
         }
     }
 
     private fun mainFragmentIsHidden(): Boolean {
-        return mainFragment.isHidden
+        return menuIsHidden()
     }
 
     private fun hideMainFragment() {
-        if (!mainFragment.isHidden) {
+        val target = activeMenuFragment()
+        if (!target.isHidden) {
             supportFragmentManager.beginTransaction()
-                .hide(mainFragment)
+                .hide(target)
                 .commit()
         }
     }
@@ -258,6 +275,7 @@ class MainActivity : FragmentActivity(), OnSharedPreferenceChangeListener {
     fun reloadChannels() {
         TVList.load(this)
         mainFragment.buildChannelList()
+        listMenuFragment.buildLists()
         Toast.makeText(this, "频道列表已更新", Toast.LENGTH_SHORT).show()
     }
 
@@ -325,12 +343,12 @@ class MainActivity : FragmentActivity(), OnSharedPreferenceChangeListener {
             velocityY: Float
         ): Boolean {
             if (velocityY > 0) {
-                if (mainFragment.isHidden) {
+                if (menuIsHidden()) {
                     prev()
                 }
             }
             if (velocityY < 0) {
-                if (mainFragment.isHidden) {
+                if (menuIsHidden()) {
                     next()
                 }
             }
@@ -339,7 +357,7 @@ class MainActivity : FragmentActivity(), OnSharedPreferenceChangeListener {
     }
 
     private fun showSetting() {
-        if (!mainFragment.isHidden) {
+        if (!menuIsHidden()) {
             return
         }
 
@@ -362,7 +380,7 @@ class MainActivity : FragmentActivity(), OnSharedPreferenceChangeListener {
     }
 
     private fun channelUp() {
-        if (mainFragment.isHidden) {
+        if (menuIsHidden()) {
             if (SP.channelReversal) {
                 next()
                 return
@@ -372,7 +390,7 @@ class MainActivity : FragmentActivity(), OnSharedPreferenceChangeListener {
     }
 
     private fun channelDown() {
-        if (mainFragment.isHidden) {
+        if (menuIsHidden()) {
             if (SP.channelReversal) {
                 prev()
                 return
@@ -444,7 +462,7 @@ class MainActivity : FragmentActivity(), OnSharedPreferenceChangeListener {
 
             KeyEvent.KEYCODE_DPAD_LEFT -> {
                 active()
-                if (mainFragment.isHidden && !settingFragment.isVisible) {
+                if (menuIsHidden() && !settingFragment.isVisible) {
                     mainFragment.switchSource(-1)
                     return true
                 }
@@ -452,7 +470,7 @@ class MainActivity : FragmentActivity(), OnSharedPreferenceChangeListener {
 
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 active()
-                if (mainFragment.isHidden && !settingFragment.isVisible) {
+                if (menuIsHidden() && !settingFragment.isVisible) {
                     mainFragment.switchSource(+1)
                     return true
                 }
@@ -483,7 +501,7 @@ class MainActivity : FragmentActivity(), OnSharedPreferenceChangeListener {
         super.onResumeFragments()
         mainFragment.changeMenu()
 
-        if (!mainFragment.isHidden) {
+        if (!menuIsHidden()) {
             handler.postDelayed(hideMain, delayHideMain)
         }
     }
@@ -505,7 +523,22 @@ class MainActivity : FragmentActivity(), OnSharedPreferenceChangeListener {
     override fun onSharedPreferenceChanged(key: String) {
         Log.i(TAG, "$key changed")
         when (key) {
-            SP.KEY_GRID -> mainFragment.changeMenu()
+            SP.KEY_GRID -> {
+                mainFragment.changeMenu()
+                // 若两种样式中有一个正显示，切换到另一种样式时保持"显示中"状态跟随新样式
+                val wasShowingActive = !inactiveMenuFragment().isHidden
+                if (wasShowingActive) {
+                    supportFragmentManager.beginTransaction()
+                        .hide(inactiveMenuFragment())
+                        .show(activeMenuFragment())
+                        .commit()
+                } else if (!activeMenuFragment().isHidden) {
+                    // 保险起见，确保另一个不会被误显示
+                    supportFragmentManager.beginTransaction()
+                        .hide(inactiveMenuFragment())
+                        .commit()
+                }
+            }
             SP.KEY_TIME -> showTime()
             SP.KEY_PLAYER_TYPE, SP.KEY_IJK_DECODER, SP.KEY_EXO_DECODER ->
                 playerFragment.onPlayerConfigChanged()
