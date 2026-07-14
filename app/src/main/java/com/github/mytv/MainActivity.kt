@@ -5,6 +5,7 @@ import android.content.res.Configuration
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.Gravity
 import android.view.SurfaceHolder
 import android.view.View
 import android.view.WindowManager
@@ -58,6 +59,10 @@ class MainActivity : FragmentActivity(), OnSharedPreferenceChangeListener {
 
     /** 自动 fallback 标记：本次 url 播放过程中是否已切换过内核，避免无限循环 */
     private var hasAutoSwitchedEngine = false
+
+    /** IJK 视频尺寸（用于保持画面比例） */
+    private var ijkVideoWidth = 0
+    private var ijkVideoHeight = 0
 
     private var isPlayerPlaying = true
 
@@ -208,7 +213,11 @@ class MainActivity : FragmentActivity(), OnSharedPreferenceChangeListener {
                 handleEngineError("ijk", "error($what,$extra)")
             }
             override fun onCompletion() {}
-            override fun onVideoSizeChanged(width: Int, height: Int) {}
+            override fun onVideoSizeChanged(width: Int, height: Int) {
+                ijkVideoWidth = width
+                ijkVideoHeight = height
+                adjustIjkAspectRatio()
+            }
             override fun onInfo(what: Int, extra: Int) {}
             override fun onBufferingUpdate(percent: Int) {}
         })
@@ -284,6 +293,32 @@ class MainActivity : FragmentActivity(), OnSharedPreferenceChangeListener {
     private fun switchToIjkView() {
         playerView.visibility = View.GONE
         ijkSurfaceView.visibility = View.VISIBLE
+        ijkSurfaceView.post { adjustIjkAspectRatio() }
+    }
+
+    /** 按 IJK 视频实际比例调整 SurfaceView 尺寸，保持 fit（不拉伸） */
+    private fun adjustIjkAspectRatio() {
+        if (ijkVideoWidth <= 0 || ijkVideoHeight <= 0) return
+        val container = ijkSurfaceView.parent as? FrameLayout ?: return
+        val cw = container.width
+        val ch = container.height
+        if (cw <= 0 || ch <= 0) return
+
+        val videoRatio = ijkVideoWidth.toFloat() / ijkVideoHeight
+        val containerRatio = cw.toFloat() / ch
+
+        val lp = ijkSurfaceView.layoutParams as FrameLayout.LayoutParams
+        if (videoRatio > containerRatio) {
+            // 视频更宽 → 宽撑满，高度按比例缩放
+            lp.width = cw
+            lp.height = (cw / videoRatio).toInt()
+        } else {
+            // 视频更高 → 高撑满，宽度按比例缩放
+            lp.width = (ch * videoRatio).toInt()
+            lp.height = ch
+        }
+        lp.gravity = Gravity.CENTER
+        ijkSurfaceView.layoutParams = lp
     }
 
     private fun releaseExo() {
@@ -304,6 +339,16 @@ class MainActivity : FragmentActivity(), OnSharedPreferenceChangeListener {
     private fun setupListeners() {
         // 播放区点击显示/隐藏控制栏（仅在已开始播放时响应）
         playerView.setOnClickListener {
+            if (!hasStartedPlayback) return@setOnClickListener
+            if (portraitControls.visibility == View.VISIBLE) {
+                portraitControls.visibility = View.GONE
+            } else {
+                portraitControls.visibility = View.VISIBLE
+                scheduleHideControls()
+            }
+        }
+        // IJK 播放时 playerView 被隐藏，需要给 ijkSurfaceView 绑定同样的点击逻辑
+        ijkSurfaceView.setOnClickListener {
             if (!hasStartedPlayback) return@setOnClickListener
             if (portraitControls.visibility == View.VISIBLE) {
                 portraitControls.visibility = View.GONE
