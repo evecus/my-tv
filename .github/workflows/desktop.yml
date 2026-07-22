@@ -26,7 +26,8 @@ jobs:
     name: Build (${{ matrix.platform }})
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
           ref: desktop
           fetch-depth: 0
