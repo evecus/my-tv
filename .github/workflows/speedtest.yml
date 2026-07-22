@@ -2,11 +2,6 @@ name: build speedtest
 
 on:
   workflow_dispatch:
-    inputs:
-      ref:
-        description: '要编译的分支/ref'
-        required: false
-        default: 'tv'
 
 permissions:
   contents: write
@@ -34,7 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.ref || 'tv' }}
+          ref: speedtest
           fetch-depth: 0
 
       - uses: dtolnay/rust-toolchain@stable
@@ -61,8 +56,8 @@ jobs:
         run: |
           TOOLCHAIN=${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin
           CC=$TOOLCHAIN/${{ matrix.cc }}
-          mkdir -p iptv-speedtest/.cargo
-          cat > iptv-speedtest/.cargo/config.toml << TOML
+          mkdir -p .cargo
+          cat > .cargo/config.toml << TOML
           [target.${{ matrix.target }}]
           linker = "$CC"
           TOML
@@ -72,7 +67,6 @@ jobs:
           echo "AR_$(echo '${{ matrix.target }}' | tr '-' '_')=$TOOLCHAIN/llvm-ar" >> "$GITHUB_ENV"
 
       - name: Build
-        working-directory: iptv-speedtest
         run: |
           cargo build \
             --no-default-features \
@@ -84,16 +78,54 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: so-${{ matrix.abi }}
-          path: iptv-speedtest/target/${{ matrix.target }}/release-android/iptv_speedtest
+          path: target/${{ matrix.target }}/release-android/iptv_speedtest
 
-  commit:
+  commit-tv:
     name: commit to jniLibs
     needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.ref || 'tv' }}
+          ref: tv
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Copy to jniLibs
+        run: |
+          for abi in arm64-v8a armeabi-v7a x86_64 x86; do
+            dest=app/src/main/jniLibs/$abi/libiptv_speedtest.so
+            src=dist/so-$abi/iptv_speedtest
+            if [ -f "$src" ]; then
+              cp "$src" "$dest"
+              chmod +x "$dest"
+              echo "✓ $dest ($(du -h $dest | cut -f1))"
+            else
+              echo "✗ missing: $src"
+              exit 1
+            fi
+          done
+
+      - name: Commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/jniLibs/
+          git diff --cached --quiet && echo "no changes" && exit 0
+          git commit -m "chore: update libiptv_speedtest.so [skip ci]"
+          git push
+
+  commit-mobile:
+    name: commit to jniLibs
+    needs: commit-tv
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mobile
           fetch-depth: 0
 
       - uses: actions/download-artifact@v4
