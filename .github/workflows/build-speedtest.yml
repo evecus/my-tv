@@ -2,6 +2,11 @@ name: build speedtest
 
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: '要编译的分支/ref'
+        required: false
+        default: 'tv'
 
 permissions:
   contents: write
@@ -28,6 +33,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'tv' }}
+          fetch-depth: 0
 
       - uses: dtolnay/rust-toolchain@stable
         with:
