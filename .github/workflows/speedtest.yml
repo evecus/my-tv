@@ -81,7 +81,7 @@ jobs:
           path: target/${{ matrix.target }}/release-android/iptv_speedtest
 
   commit-tv:
-    name: commit to jniLibs
+    name: commit to jniLibs for tv
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -119,7 +119,7 @@ jobs:
           git push
 
   commit-mobile:
-    name: commit to jniLibs
+    name: commit to jniLibs for mobile
     needs: commit-tv
     runs-on: ubuntu-latest
     steps:
