@@ -14,6 +14,8 @@ class TvState {
     this.groups = const [],
     this.activeGroup = '',
     this.currentChannel,
+    this.currentStreamUrls = const [],
+    this.currentStreamIndex = 0,
     this.isPlaying = false,
     this.playerError,
   });
@@ -22,13 +24,29 @@ class TvState {
   final List<String> groups;
   final String activeGroup;
   final Channel? currentChannel;
+
+  /// 当前播放频道的全部源地址 (同名频道去重后的 url 集合)。
+  /// 对应 Nexus IptvPlayerController.streamUrls：多个 m3u 条目如果
+  /// 频道名相同 (如多个来源都叫 "CCTV1")，视为同一个频道的不同源，
+  /// 而不是重复的频道条目。
+  final List<String> currentStreamUrls;
+
+  /// 当前选中的源下标，对应右侧"源"列的高亮项。
+  final int currentStreamIndex;
   final bool isPlaying;
   final String? playerError;
 
   /// 当前分组过滤后的频道 (对应 Pinia getter filteredChannels)。
+  ///
+  /// 按频道名去重——m3u 里经常出现多条同名频道 (同一频道的不同源/
+  /// 不同清晰度)，这些不应该在频道列表里重复显示成多行，而是合并为
+  /// 一个频道条目，选中后在右侧"源"列展示全部可选源。
+  /// 对应 Nexus `browsedChannels` 里 `seen.add(c.name)` 的去重逻辑。
   List<Channel> get filteredChannels {
-    if (activeGroup.isEmpty) return channels;
-    return channels.where((c) => c.group == activeGroup).toList();
+    final scoped =
+        activeGroup.isEmpty ? channels : channels.where((c) => c.group == activeGroup);
+    final seen = <String>{};
+    return scoped.where((c) => seen.add(c.name)).toList();
   }
 
   /// 当前正在播放的频道所属分组 (用于分组列表的"播放中"高亮，
@@ -41,6 +59,8 @@ class TvState {
     List<String>? groups,
     String? activeGroup,
     Channel? currentChannel,
+    List<String>? currentStreamUrls,
+    int? currentStreamIndex,
     bool? isPlaying,
     String? playerError,
     bool clearCurrent = false,
@@ -52,6 +72,11 @@ class TvState {
         activeGroup: activeGroup ?? this.activeGroup,
         currentChannel:
             clearCurrent ? null : (currentChannel ?? this.currentChannel),
+        currentStreamUrls: clearCurrent
+            ? const []
+            : (currentStreamUrls ?? this.currentStreamUrls),
+        currentStreamIndex:
+            clearCurrent ? 0 : (currentStreamIndex ?? this.currentStreamIndex),
         isPlaying: isPlaying ?? this.isPlaying,
         playerError: clearError ? null : (playerError ?? this.playerError),
       );
@@ -104,16 +129,43 @@ class TvNotifier extends Notifier<TvState> {
   }
 
   /// 播放频道 (对应 Pinia playChannel -> invoke('play_url'))。
+  ///
+  /// 会先按频道名从全量 channels 里收集所有同名条目的 url 作为
+  /// "源" 列表 (对应 Nexus selectChannel 里的去重收集逻辑)，默认播放
+  /// 第一个源。
   Future<void> playChannel(Channel channel) async {
+    final urls = state.channels
+        .where((c) => c.name == channel.name)
+        .map((c) => c.url)
+        .toSet()
+        .toList();
+    final streamUrls = urls.isNotEmpty ? urls : [channel.url];
+
     state = state.copyWith(
       currentChannel: channel,
+      currentStreamUrls: streamUrls,
+      currentStreamIndex: 0,
       isPlaying: true,
       clearError: true,
     );
     final player = ref.read(playerServiceProvider);
-    await player.play(channel.url);
+    await player.play(streamUrls.first);
     if (player.error != null) {
       state = state.copyWith(playerError: player.error, isPlaying: false);
+    }
+  }
+
+  /// 切换到当前频道的某个源 (对应右侧"源"列点击)。
+  /// 不改变 currentChannel/分组/频道列表的选中状态，只切换实际播放的 url。
+  Future<void> selectStream(int index) async {
+    if (index < 0 || index >= state.currentStreamUrls.length) return;
+    if (index == state.currentStreamIndex) return;
+
+    state = state.copyWith(currentStreamIndex: index, clearError: true);
+    final player = ref.read(playerServiceProvider);
+    await player.play(state.currentStreamUrls[index]);
+    if (player.error != null) {
+      state = state.copyWith(playerError: player.error);
     }
   }
 
