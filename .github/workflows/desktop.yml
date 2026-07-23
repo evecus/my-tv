@@ -29,8 +29,15 @@ jobs:
       - name: Enable Windows desktop support
         run: flutter config --enable-windows-desktop
 
-      - name: Flutter doctor
-        run: flutter doctor -v
+      - name: Ensure windows/ platform folder exists
+        shell: powershell
+        run: |
+          if (-not (Test-Path "windows")) {
+            Write-Host "windows/ not found in repo, generating it with 'flutter create'..."
+            flutter create --platforms=windows .
+          } else {
+            Write-Host "windows/ already present, skipping."
+          }
 
       - name: Get dependencies
         run: flutter pub get
