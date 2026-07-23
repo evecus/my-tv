@@ -3,15 +3,6 @@ name: Build Windows
 # 触发条件：推送到 main / master、打 tag、PR，以及手动触发
 on:
   workflow_dispatch:
-    inputs:
-      flutter_channel:
-        description: "Flutter channel"
-        required: false
-        default: "stable"
-        type: choice
-        options:
-          - stable
-          - beta
 
 env:
   FLUTTER_VERSION: "3.24.0" # 按需与 pubspec.yaml 中的最低版本对齐，可改为具体版本号
@@ -28,11 +19,11 @@ jobs:
           ref: desktop
           fetch-depth: 0
 
-      - name: Setup Flutter
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: ${{ github.event.inputs.flutter_channel || 'stable' }}
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          flutter-version: '3.44.6'
+          channel: stable
           cache: true
 
       - name: Enable Windows desktop support
