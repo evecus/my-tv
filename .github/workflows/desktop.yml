@@ -1,211 +1,96 @@
-name: Build Desktop
+name: Build Windows
 
+# 触发条件：推送到 main / master、打 tag、PR，以及手动触发
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: '版本号 (如 v1.0.0)'
-        required: true
-        default: 'v1.0.0'
+      flutter_channel:
+        description: "Flutter channel"
+        required: false
+        default: "stable"
+        type: choice
+        options:
+          - stable
+          - beta
 
-permissions:
-  contents: write
+env:
+  FLUTTER_VERSION: "3.24.0" # 按需与 pubspec.yaml 中的最低版本对齐，可改为具体版本号
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-22.04
-            platform: linux
-          - os: windows-latest
-            platform: windows
-
-    runs-on: ${{ matrix.os }}
-    name: Build (${{ matrix.platform }})
+  build-windows:
+    name: Build Windows Release
+    runs-on: windows-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
-          ref: desktop
-          fetch-depth: 0
+          channel: ${{ github.event.inputs.flutter_channel || 'stable' }}
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
+      - name: Enable Windows desktop support
+        run: flutter config --enable-windows-desktop
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Flutter doctor
+        run: flutter doctor -v
 
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
+      - name: Get dependencies
+        run: flutter pub get
 
-      # ── Linux ────────────────────────────────────────────────────
-      - name: Install Linux system deps
-        if: matrix.platform == 'linux'
+      - name: Analyze project (non-blocking)
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+        continue-on-error: true
+
+      - name: Run tests
+        run: flutter test
+        continue-on-error: true
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Strip unused VLC plugins
+        shell: powershell
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libssl-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libmpv-dev \
-            patchelf
-          # dlls/ dir is Windows-only; remove placeholder so Tauri doesn't choke
-          rm -f src-tauri/dlls/.gitkeep
+          powershell -ExecutionPolicy Bypass -File scripts/strip_vlc_plugins.ps1
 
-      # ── Windows: download mpv-dev, generate MSVC-compatible .lib ─
-      - name: Download and prepare mpv-dev for Windows
-        if: matrix.platform == 'windows'
+      - name: Locate build output
+        id: locate
+        shell: powershell
+        run: |
+          $releaseDir = "build\windows\x64\runner\Release"
+          if (-not (Test-Path $releaseDir)) {
+            Write-Error "Release directory not found: $releaseDir"
+            exit 1
+          }
+          $resolved = (Resolve-Path $releaseDir).Path
+          Write-Host "Release directory: $resolved"
+          echo "release_dir=$resolved" >> $env:GITHUB_OUTPUT
+
+      - name: Package artifact (zip)
+        shell: powershell
+        run: |
+          $version = "${{ github.ref_name }}"
+          if ([string]::IsNullOrWhiteSpace($version)) { $version = "dev" }
+          $zipName = "mytv_desktop-windows-$version.zip"
+          Compress-Archive -Path "${{ steps.locate.outputs.release_dir }}\*" -DestinationPath $zipName -Force
+          echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mytv_desktop-windows
+          path: ${{ env.ZIP_NAME }}
+          retention-days: 30
+
+      - name: Create GitHub Release (on tag push)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ZIP_NAME }}
+          generate_release_notes: true
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: pwsh
-        run: |
-          $release = gh api repos/shinchiro/mpv-winbuild-cmake/releases `
-            --jq '[.[] | select(.assets | length > 0)][0]' | ConvertFrom-Json
-          $asset = $release.assets |
-            Where-Object { $_.name -match "mpv-dev-x86_64" } |
-            Select-Object -First 1
-          Write-Host "Downloading: $($asset.name)"
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile mpv-dev.7z
-          7z x mpv-dev.7z -ompv-dev -y
-
-          $dll     = Get-ChildItem -Recurse mpv-dev -Filter "*.dll" | Select-Object -First 1
-          $dllA    = Get-ChildItem -Recurse mpv-dev -Filter "*.dll.a" | Select-Object -First 1
-          $clientH = Get-ChildItem -Recurse mpv-dev -Filter "client.h" | Select-Object -First 1
-          $includePath = if ($clientH) { (Get-Item $clientH.DirectoryName).Parent.FullName } else { "$pwd\mpv-dev" }
-
-          Write-Host "dll:     $($dll.FullName)"
-          Write-Host "dll.a:   $($dllA.FullName)"
-          Write-Host "include: $includePath"
-
-          $libDir = "$pwd\mpv-msvc-lib"
-          New-Item -ItemType Directory -Force -Path $libDir | Out-Null
-          Copy-Item $dll.FullName "$libDir\"
-
-          # Find lib.exe via vswhere
-          $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $vsPath  = & $vsWhere -latest -property installationPath
-          $msvcDir = Get-ChildItem "$vsPath\VC\Tools\MSVC" | Sort-Object Name | Select-Object -Last 1
-          $libExe  = "$($msvcDir.FullName)\bin\HostX64\x64\lib.exe"
-          $dumpbin = "$($msvcDir.FullName)\bin\HostX64\x64\dumpbin.exe"
-          Write-Host "lib.exe:  $libExe"
-          Write-Host "dumpbin:  $dumpbin"
-
-          # gendef (mingw) ships on windows-latest at C:\msys64\mingw64\bin\
-          $gendef = "C:\msys64\mingw64\bin\gendef.exe"
-          if (Test-Path $gendef) {
-            Write-Host "Using gendef"
-            Push-Location $libDir
-            & $gendef "$($dll.FullName)"
-            Pop-Location
-            $defFile = (Get-ChildItem $libDir -Filter "*.def")[0].FullName
-            Write-Host "def: $defFile"
-          } else {
-            # fallback: dumpbin to extract exports and write .def
-            Write-Host "gendef not found, using dumpbin"
-            $raw = & $dumpbin /EXPORTS "$($dll.FullName)" 2>&1
-            $exports = $raw | ForEach-Object {
-              if ($_ -match "^\s+\d+\s+[0-9A-Fa-f]+\s+[0-9A-Fa-f]+\s+(\S+)\s*$") { $Matches[1] }
-            } | Where-Object { $_ }
-            Write-Host "Exports: $($exports.Count)"
-            $defFile = "$libDir\mpv.def"
-            "LIBRARY $($dll.Name)`nEXPORTS`n$($exports -join "`n")" |
-              Out-File $defFile -Encoding ASCII
-          }
-
-          & $libExe /DEF:"$defFile" /OUT:"$libDir\mpv.lib" /MACHINE:X64
-
-          if (-not (Test-Path "$libDir\mpv.lib")) {
-            Write-Error "Failed to generate mpv.lib"; exit 1
-          }
-          Write-Host "mpv.lib OK: $((Get-Item "$libDir\mpv.lib").Length) bytes"
-
-          # Copy dll into src-tauri/dlls/ so Tauri bundles it alongside the exe
-          New-Item -ItemType Directory -Force -Path "src-tauri\dlls" | Out-Null
-          Copy-Item $dll.FullName "src-tauri\dlls\"
-          Write-Host "Copied $($dll.Name) to src-tauri\dlls\"
-
-          echo "MPV_DLL=$($dll.FullName)"      >> $env:GITHUB_ENV
-          echo "MPV_DLL_NAME=$($dll.Name)"     >> $env:GITHUB_ENV
-          echo "MPV_LIB_DIR=$libDir"           >> $env:GITHUB_ENV
-          echo "MPV_INCLUDE_DIR=$includePath"  >> $env:GITHUB_ENV
-
-      - name: Install frontend deps
-        run: npm install
-
-      - name: Tag commit (manual trigger)
-        if: github.event_name == 'workflow_dispatch'
-        shell: bash
-        run: |
-          git config user.name  "github-actions"
-          git config user.email "github-actions@github.com"
-          git tag ${{ github.event.inputs.tag }} || true
-
-      # ── Build ────────────────────────────────────────────────────
-      - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
-          MPV_INCLUDE_DIR: ${{ env.MPV_INCLUDE_DIR }}
-          MPV_LIB_DIR:     ${{ env.MPV_LIB_DIR }}
-        with:
-          tagName:     ${{ github.event.inputs.tag || github.ref_name }}
-          releaseName: '我的电视 桌面版 ${{ github.event.inputs.tag || github.ref_name }}'
-          releaseBody: |
-            ## 下载说明
-
-            ### Windows
-            下载 `mytv-desktop_x.x.x_x64-setup.exe`，安装后直接运行，无需额外安装任何软件。
-
-            ### Linux
-            - `.deb`：`sudo dpkg -i mytv-desktop_*.deb`
-            - `.AppImage`：`chmod +x mytv-desktop_*.AppImage && ./mytv-desktop_*.AppImage`
-          releaseDraft: false
-          prerelease:   false
-
-      # ── Windows: copy mpv dll beside the installed exe ──────────
-      - name: Add mpv dll to Windows installer output
-        if: matrix.platform == 'windows'
-        shell: pwsh
-        run: |
-          $nsis = Get-ChildItem -Recurse src-tauri/target/release/bundle/nsis `
-            -Filter "*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($nsis) {
-            Write-Host "NSIS installer: $($nsis.FullName)"
-            # The dll needs to be in the same dir as the exe at runtime
-            # Tauri NSIS bundles everything in the install dir, so we copy
-            # the dll to the bundle dir before packaging (too late here for NSIS,
-            # but the exe will load dll from PATH or its own dir)
-            Write-Host "Note: mpv dll must be distributed alongside the exe."
-            Write-Host "Users should place $env:MPV_DLL_NAME next to mytv-desktop.exe if playback fails."
-          }
-
-      # ── Linux: bundle libmpv into AppImage ───────────────────────
-      - name: Bundle libmpv into AppImage
-        if: matrix.platform == 'linux'
-        run: |
-          APPIMAGE=$(find src-tauri/target/release/bundle/appimage \
-            -name "*.AppImage" 2>/dev/null | head -1)
-          if [ -z "$APPIMAGE" ]; then echo "No AppImage found, skipping"; exit 0; fi
-
-          "$APPIMAGE" --appimage-extract 2>/dev/null
-          LIBMPV=$(ldconfig -p | grep "libmpv.so" | awk '{print $NF}' | head -1)
-          if [ -n "$LIBMPV" ]; then
-            cp "$LIBMPV" squashfs-root/usr/lib/
-            patchelf --set-rpath '$ORIGIN/../lib' \
-              squashfs-root/usr/bin/mytv-desktop 2>/dev/null || true
-            echo "Bundled $LIBMPV into AppImage"
-          fi
-
-          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-          chmod +x appimagetool-x86_64.AppImage
-          ARCH=x86_64 ./appimagetool-x86_64.AppImage squashfs-root \
-            "${APPIMAGE%.AppImage}-bundled.AppImage" 2>/dev/null || true
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
