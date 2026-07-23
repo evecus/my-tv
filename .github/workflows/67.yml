@@ -1,0 +1,27 @@
+name: B
+
+# 触发条件：推送到 main / master、打 tag、PR，以及手动触发
+on:
+  workflow_dispatch:
+
+env:
+  FLUTTER_VERSION: "3.24.0" # 按需与 pubspec.yaml 中的最低版本对齐，可改为具体版本号
+
+jobs:
+  build-windows:
+    name: Build Windows Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: desktop
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.6'
+          channel: stable
+          cache: true
