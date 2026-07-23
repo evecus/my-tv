@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'theme/app_theme.dart';
-import 'ui/home_page.dart';
+import 'ui/tv_home_page.dart';
 
 class MyTvApp extends StatelessWidget {
   const MyTvApp({super.key});
@@ -12,7 +12,7 @@ class MyTvApp extends StatelessWidget {
       title: '我的电视',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
-      home: const HomePage(),
+      home: const TvHomePage(),
     );
   }
 }

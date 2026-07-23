@@ -32,7 +32,7 @@ String buildM3u8Entry(String name, String streamUrl, double speed) {
 
 // ── 频道名清洗 ────────────────────────────────────────────────────
 
-final _reCctvExtract = RegExp(r'(?i)CCTV(\d{1,2})(\+)?');
+final _reCctvExtract = RegExp(r'CCTV(\d{1,2})(\+)?');
 final _reWeixiExtract = RegExp(r'([\u4e00-\u9fff]+卫视)');
 final _reCctvNum = RegExp(r'CCTV(\d+)台');
 

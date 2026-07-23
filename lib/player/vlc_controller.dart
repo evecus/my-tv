@@ -22,14 +22,24 @@ import 'package:vlc_player/vlc_player.dart';
 class VlcPlayerService extends ChangeNotifier {
   VlcPlayerController? _controller;
   bool _isPlaying = false;
+  bool _isBuffering = false;
   String? _error;
   bool _disposed = false;
+  double _lastVolume = 100.0;
 
   /// 当前的 controller。为 null 表示尚未开始播放（初始态或已 stop）。
   /// UI 层需要判空后再传给 VlcPlayer widget。
   VlcPlayerController? get controller => _controller;
   bool get isPlaying => _isPlaying;
+  bool get isBuffering => _isBuffering;
   String? get error => _error;
+
+  /// 当前音量，0-100（VLC 原生范围是 0-200，这里做了归一化）。
+  double get volume {
+    final raw = _controller?.value;
+    if (raw == null) return _lastVolume;
+    return (raw.volume / 2).clamp(0.0, 100.0);
+  }
 
   /// 播放指定 URL。对应 Rust `player::play`。
   ///
@@ -85,11 +95,50 @@ class VlcPlayerService extends ChangeNotifier {
   void _onChanged() {
     final c = _controller;
     if (c == null) return;
-    final playing = c.value.state == VlcPlaybackState.playing;
+    final v = c.value;
+
+    final playing = v.state == VlcPlaybackState.playing;
     if (playing != _isPlaying) {
       _isPlaying = playing;
       notifyListeners();
     }
+
+    final buffering = v.state == VlcPlaybackState.buffering ||
+        v.state == VlcPlaybackState.opening;
+    if (buffering != _isBuffering) {
+      _isBuffering = buffering;
+      notifyListeners();
+    }
+
+    final vol = (v.volume / 2).clamp(0.0, 100.0);
+    if (vol != _lastVolume) {
+      _lastVolume = vol;
+      notifyListeners();
+    }
+  }
+
+  /// 播放/暂停切换。对应视频区底部控制条的播放按钮。
+  Future<void> playOrPause() async {
+    final c = _controller;
+    if (c == null) return;
+    if (c.value.state == VlcPlaybackState.playing) {
+      await c.pause();
+    } else {
+      await c.play();
+    }
+  }
+
+  /// 设置音量，入参范围 0-100（VLC 原生范围 0-200，内部做 ×2 转换）。
+  Future<void> setVolume(double v) async {
+    final c = _controller;
+    final clamped = v.clamp(0.0, 100.0);
+    _lastVolume = clamped;
+    if (c == null) {
+      notifyListeners();
+      return;
+    }
+    await c.setVolume((clamped * 2).round());
+    notifyListeners();
   }
 
   /// 停止播放。对应 Rust `player::stop`。
@@ -104,6 +153,7 @@ class VlcPlayerService extends ChangeNotifier {
       _controller = null;
     }
     _isPlaying = false;
+    _isBuffering = false;
     notifyListeners();
   }
 

@@ -31,6 +31,11 @@ class TvState {
     return channels.where((c) => c.group == activeGroup).toList();
   }
 
+  /// 当前正在播放的频道所属分组 (用于分组列表的"播放中"高亮，
+  /// 与 activeGroup 浏览态解耦——用户浏览别的分组时，播放中的
+  /// 分组仍应保留一个区别于普通态的标记)。
+  String get playingGroup => currentChannel?.group ?? '';
+
   TvState copyWith({
     List<Channel>? channels,
     List<String>? groups,
@@ -79,9 +84,18 @@ class TvNotifier extends Notifier<TvState> {
       }
       var active = state.activeGroup;
       if (active.isEmpty && groups.isNotEmpty) active = groups.first;
-      state = state.copyWith(channels: list, groups: groups, activeGroup: active);
+      state = state.copyWith(
+        channels: list,
+        groups: groups,
+        activeGroup: active,
+        clearError: true,
+      );
     } catch (e) {
       debugPrint('loadChannels: $e');
+      // 之前这里只 debugPrint 静默吞掉异常，UI 上完全看不出加载失败，
+      // 表现为"测速完成后频道列表一直不出现"且无任何提示。改为把错误
+      // 写进 state，右侧面板会显示出来，方便排查。
+      state = state.copyWith(playerError: '加载频道列表失败: $e');
     }
   }
 
