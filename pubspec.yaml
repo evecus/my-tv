@@ -1,0 +1,40 @@
+name: mytv_desktop
+description: 我的电视 - 桌面版 (Flutter). IPTV 桌面播放器，仅 Windows.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.19.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # 状态管理
+  flutter_riverpod: ^2.5.1
+
+  # 播放器 (libvlc 绑定)
+  vlc_player: ^2.1.2
+
+  # 文件 / 路径
+  path_provider: ^2.1.4
+  path: ^1.9.0
+
+  # 网络 (测速引擎)
+  http: ^1.2.2
+  collection: ^1.18.0
+
+  # 并发限流 (信号量，对应 Rust 的 tokio::Semaphore)
+  pool: ^1.5.1
+
+  # 日期格式化 (m3u8 输出头 #EXT-X-UPDATED)
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
