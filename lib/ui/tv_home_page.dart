@@ -19,9 +19,10 @@ import 'widgets/speedtest_overlay.dart';
 ///   管理一整套架构；本项目保持 Riverpod + 单一 VlcPlayerService，只在
 ///   视觉和交互层面对齐，不引入新依赖。
 /// - Nexus 是"点进播放页"的独立路由，本项目是单页应用，此页面即主页面。
-/// - Nexus 每个频道可能有多个源(streamUrls)，本项目的 m3u 频道模型
-///   (Channel) 每个频道只有一个 url，因此"源"列只显示当前频道的
-///   唯一源作为占位，为将来支持多源留出同样的视觉位置。
+/// - Nexus 每个频道可能有多个源(streamUrls)：多条 m3u 里同名的频道条目
+///   会被合并为一个频道 + 多个源，而不是重复的频道条目。本项目在
+///   TvState.filteredChannels（按 name 去重）和 TvNotifier.playChannel
+///   （收集同名条目的 url 作为 currentStreamUrls）里实现了同样的效果。
 /// - 测速更新 / 刷新按钮按用户要求放在右侧面板顶部 header 栏（频道名旁边），
 ///   而非 Nexus 视频区的悬浮控制条。
 class TvHomePage extends ConsumerStatefulWidget {
@@ -295,8 +296,8 @@ class _ChannelPanel extends ConsumerWidget {
                       // Column 2: 频道 (自适应)
                       Expanded(child: _ChannelColumn()),
                       VerticalDivider(width: 1, color: AppColors.border),
-                      // Column 3: 源 (72px 固定，当前每频道只有单一源，
-                      // 为将来多源扩展保留同样的视觉位置)
+                      // Column 3: 源 (72px 固定，展示当前频道的全部同名
+                      // 源，为空时不显示)
                       SizedBox(width: 72, child: _StreamColumn()),
                     ],
                   ),
@@ -520,7 +521,10 @@ class _ChannelColumn extends ConsumerWidget {
       itemCount: list.length,
       itemBuilder: (_, i) {
         final ch = list[i];
-        final isPlaying = tv.currentChannel?.url == ch.url;
+        // 频道列表已按 name 去重，选中判断也要用 name 而非 url——
+        // 正在播放的 url 可能是同名频道里的第 2/3 个源，不一定是这里
+        // 展示的这一条 url。
+        final isPlaying = tv.currentChannel?.name == ch.name;
         return _ChannelTile(
           channel: ch,
           selected: isPlaying,
@@ -637,36 +641,49 @@ class _ChannelLogoFallback extends StatelessWidget {
 // 显示为"源1"占位，为将来多源支持保留同样的视觉位置)
 // ─────────────────────────────────────────────────────────────────────────
 
+/// Column 3 — 源：当前频道的全部可用源 (同名频道去重时收集到的 url 列表)。
+/// 对应 Nexus 的 _StreamColumn：点击切换实际播放的 url，不影响
+/// currentChannel/分组/频道列表的选中状态。
 class _StreamColumn extends ConsumerWidget {
   const _StreamColumn();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tv = ref.watch(tvProvider);
-    final hasCurrent = tv.currentChannel != null;
+    final urls = tv.currentStreamUrls;
+    final selectedIndex = tv.currentStreamIndex;
 
-    return ListView(
+    if (urls.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      children: [
-        if (hasCurrent)
-          Container(
+      itemCount: urls.length,
+      itemBuilder: (_, i) {
+        final isSelected = selectedIndex == i;
+        return InkWell(
+          onTap: () => ref.read(tvProvider.notifier).selectStream(i),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 110),
             margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             decoration: BoxDecoration(
-              color: AppColors.accent,
+              color: isSelected ? AppColors.accent : AppColors.bg3,
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Text(
-              '源1',
+            child: Text(
+              '源${i + 1}',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
+                color: isSelected ? Colors.white : AppColors.text2,
               ),
             ),
           ),
-      ],
+        );
+      },
     );
   }
 }
