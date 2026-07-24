@@ -9,9 +9,6 @@ on:
         required: true
         type: string
 
-env:
-  FLUTTER_VERSION: "3.24.0" # 按需与 pubspec.yaml 中的最低版本对齐，可改为具体版本号
-
 jobs:
   build-windows:
     name: Build Windows Release
