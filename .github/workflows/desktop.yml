@@ -3,6 +3,11 @@ name: Build Windows
 # 触发条件：推送到 main / master、打 tag、PR，以及手动触发
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.0.0)'
+        required: true
+        type: string
 
 env:
   FLUTTER_VERSION: "3.24.0" # 按需与 pubspec.yaml 中的最低版本对齐，可改为具体版本号
