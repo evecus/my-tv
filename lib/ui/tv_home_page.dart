@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:vlc_player/vlc_player.dart';
+import 'package:window_manager/window_manager.dart';
 
 import '../m3u/channel.dart';
 import '../player/vlc_controller.dart';
@@ -10,6 +11,10 @@ import '../state/speedtest_provider.dart';
 import '../state/tv_provider.dart';
 import '../theme/app_theme.dart';
 import 'widgets/speedtest_overlay.dart';
+
+/// 是否处于全屏播放态。对应 Nexus IptvPlayerController.isFullScreen，
+/// 这里用普通的 StateProvider 承载同样的开关状态，不引入 GetX。
+final isFullScreenProvider = StateProvider<bool>((ref) => false);
 
 /// 主页面。整体布局参照 Nexus (nexus_windows) 的 IPTV 播放页：
 /// 左侧大视频区（常驻，非弹窗）+ 右侧固定宽度三栏面板（分组 / 频道 / 源）。
@@ -25,6 +30,10 @@ import 'widgets/speedtest_overlay.dart';
 ///   （收集同名条目的 url 作为 currentStreamUrls）里实现了同样的效果。
 /// - 测速更新 / 刷新按钮按用户要求放在右侧面板顶部 header 栏（频道名旁边），
 ///   而非 Nexus 视频区的悬浮控制条。
+/// - 全屏：Windows 桌面应用的"全屏"是让整个程序窗口占满屏幕
+///   (windowManager.setFullScreen)，不是网页 Fullscreen API。全屏时
+///   隐藏右侧频道面板，视频区占满整个窗口；支持 F 键切换、Esc 退出、
+///   双击视频区切换，与 Nexus 的快捷键设计一致。
 class TvHomePage extends ConsumerStatefulWidget {
   const TvHomePage({super.key});
 
@@ -37,14 +46,29 @@ class _TvHomePageState extends ConsumerState<TvHomePage> {
 
   @override
   void dispose() {
+    // 页面销毁前如果还处于全屏，退出窗口全屏，避免残留全屏状态。
+    if (ref.read(isFullScreenProvider)) {
+      windowManager.setFullScreen(false);
+    }
     _focusNode.dispose();
     super.dispose();
+  }
+
+  Future<void> _enterFullScreen() async {
+    await windowManager.setFullScreen(true);
+    if (mounted) ref.read(isFullScreenProvider.notifier).state = true;
+  }
+
+  Future<void> _exitFullScreen() async {
+    await windowManager.setFullScreen(false);
+    if (mounted) ref.read(isFullScreenProvider.notifier).state = false;
   }
 
   @override
   Widget build(BuildContext context) {
     final speedtestRunning =
         ref.watch(speedtestProvider.select((s) => s.running));
+    final isFullScreen = ref.watch(isFullScreenProvider);
 
     return KeyboardListener(
       focusNode: _focusNode,
@@ -53,19 +77,34 @@ class _TvHomePageState extends ConsumerState<TvHomePage> {
         if (e is! KeyDownEvent) return;
         if (e.logicalKey == LogicalKeyboardKey.space) {
           ref.read(playerServiceProvider).playOrPause();
+        } else if (e.logicalKey == LogicalKeyboardKey.keyF) {
+          isFullScreen ? _exitFullScreen() : _enterFullScreen();
+        } else if (e.logicalKey == LogicalKeyboardKey.escape &&
+            isFullScreen) {
+          _exitFullScreen();
         }
       },
       child: Scaffold(
         backgroundColor: Colors.black,
         body: Stack(
           children: [
-            const Row(
+            Row(
               children: [
-                Expanded(flex: 7, child: _VideoArea()),
-                SizedBox(width: 360, child: _ChannelPanel()),
+                Expanded(
+                  flex: isFullScreen ? 1 : 7,
+                  child: _VideoArea(
+                    isFullScreen: isFullScreen,
+                    onToggleFullScreen: () => isFullScreen
+                        ? _exitFullScreen()
+                        : _enterFullScreen(),
+                  ),
+                ),
+                // 全屏时不显示右侧频道面板，视频区占满整个窗口。
+                if (!isFullScreen)
+                  const SizedBox(width: 360, child: _ChannelPanel()),
               ],
             ),
-            if (speedtestRunning) const SpeedtestOverlay(),
+            if (speedtestRunning && !isFullScreen) const SpeedtestOverlay(),
           ],
         ),
       ),
@@ -78,7 +117,13 @@ class _TvHomePageState extends ConsumerState<TvHomePage> {
 // ─────────────────────────────────────────────────────────────────────────
 
 class _VideoArea extends ConsumerStatefulWidget {
-  const _VideoArea();
+  const _VideoArea({
+    required this.isFullScreen,
+    required this.onToggleFullScreen,
+  });
+
+  final bool isFullScreen;
+  final VoidCallback onToggleFullScreen;
 
   @override
   ConsumerState<_VideoArea> createState() => _VideoAreaState();
@@ -101,9 +146,11 @@ class _VideoAreaState extends ConsumerState<_VideoArea> {
       onHover: (_) => _onMouseMove(),
       onEnter: (_) => _onMouseMove(),
       cursor: SystemMouseCursors.basic,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
+      child: GestureDetector(
+        onDoubleTap: widget.onToggleFullScreen,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
           ColoredBox(
             color: Colors.black,
             child: controller == null
@@ -222,6 +269,18 @@ class _VideoAreaState extends ConsumerState<_VideoArea> {
                             ),
                           ),
                         ),
+                        const Spacer(),
+                        IconButton(
+                          icon: Icon(
+                            widget.isFullScreen
+                                ? Icons.fullscreen_exit_rounded
+                                : Icons.fullscreen_rounded,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                          tooltip: widget.isFullScreen ? '退出全屏 (Esc)' : '全屏 (F)',
+                          onPressed: widget.onToggleFullScreen,
+                        ),
                       ],
                     ),
                   ),
@@ -230,6 +289,7 @@ class _VideoAreaState extends ConsumerState<_VideoArea> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
