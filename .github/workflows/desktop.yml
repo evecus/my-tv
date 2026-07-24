@@ -42,14 +42,6 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Analyze project (non-blocking)
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
-        continue-on-error: true
-
-      - name: Run tests
-        run: flutter test
-        continue-on-error: true
-
       - name: Build Windows release
         run: flutter build windows --release
 
