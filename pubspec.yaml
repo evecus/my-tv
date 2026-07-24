@@ -21,6 +21,9 @@ dependencies:
   path_provider: ^2.1.4
   path: ^1.9.0
 
+  # 窗口管理 (全屏/退出全屏)
+  window_manager: ^0.5.1
+
   # 网络 (测速引擎)
   http: ^1.2.2
   collection: ^1.18.0
